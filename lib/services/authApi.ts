@@ -37,8 +37,15 @@ export const authApi = baseApi.injectEndpoints({
       query: (body) => ({ url: '/auth/login', method: 'POST', body }),
     }),
 
-    logout: build.mutation<{ success: boolean; message: string }, void>({
-      query: () => ({ url: '/auth/logout', method: 'POST' }),
+    logout: build.mutation<
+      { success: boolean; message: string },
+      { refreshToken?: string } | void
+    >({
+      query: (body) => ({
+        url: '/auth/logout',
+        method: 'POST',
+        body: body || undefined,
+      }),
     }),
 
     getMe: build.query<{ success: boolean; data: MeResponse }, void>({

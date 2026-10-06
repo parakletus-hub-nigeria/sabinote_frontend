@@ -16,6 +16,7 @@ export const generateApi = baseApi.injectEndpoints({
       {
         durationMinutes: number
         resourceId?: string
+        curriculumUnitId?: string
         curriculumWeekId?: string
         generalCurriculumId?: string
       }

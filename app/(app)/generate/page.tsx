@@ -52,7 +52,7 @@ export default function GeneratePage() {
   const [term, setTerm] = useState(1);
   const [selectedWeek, setSelectedWeek] = useState<{
     id: string;
-    source: "state" | "general";
+    source: "release" | "state" | "general";
   } | null>(null);
   const selectedWeekId = selectedWeek?.id ?? null;
   const [duration, setDuration] = useState(40);
@@ -103,7 +103,9 @@ export default function GeneratePage() {
       }, 1400);
       const payload = {
         durationMinutes: duration,
-        ...(selectedWeek.source === "state"
+        ...(selectedWeek.source === "release"
+          ? { curriculumUnitId: selectedWeek.id }
+          : selectedWeek.source === "state"
           ? { curriculumWeekId: selectedWeek.id }
           : { generalCurriculumId: selectedWeek.id }),
       };
