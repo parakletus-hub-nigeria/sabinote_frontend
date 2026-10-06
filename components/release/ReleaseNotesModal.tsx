@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { PLATFORM_RELEASE_MANIFEST, type HistoricReleaseItem } from '@/lib/config/release.manifest';
 
+const LOGO_URL = "https://res.cloudinary.com/drh4ma3hj/image/upload/v1779473509/SabiNote_Purple_SVG_tlzlqm.svg";
+
 interface ReleaseNotesModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -64,11 +66,8 @@ export function ReleaseNotesModal({ isOpen, onClose }: ReleaseNotesModalProps) {
           style={{ background: 'linear-gradient(180deg, #FAF8FF 0%, #FFFFFF 100%)' }}
         >
           <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm font-bold text-sm"
-              style={{ background: 'linear-gradient(135deg, #641BC4 0%, #4B109B 100%)' }}
-            >
-              SN
+            <div className="flex items-center gap-1.5 shrink-0 bg-white p-1.5 rounded-xl border border-purple-100 shadow-xs">
+              <img src={LOGO_URL} alt="SabiNote" className="h-7 w-auto object-contain" />
             </div>
             <div>
               <div className="flex items-center gap-2">
