@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef } from "react";
+import { ReleaseBadge } from "@/components/release";
 
 /* ── Brand logo image (reused in nav + footer) ───────────────────── */
 const LOGO_URL =
@@ -1777,12 +1778,15 @@ export default function LandingPage() {
             className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-8 border-t"
             style={{ borderColor: "rgba(255,255,255,0.08)" }}
           >
-            <span
-              className="text-xs"
-              style={{ color: "rgba(255,255,255,0.3)" }}
-            >
-              © 2026 Parakletus Technologies. All rights reserved.
-            </span>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <span
+                className="text-xs"
+                style={{ color: "rgba(255,255,255,0.3)" }}
+              >
+                © 2026 Parakletus Technologies. All rights reserved.
+              </span>
+              <ReleaseBadge variant="dark" />
+            </div>
             <div className="flex gap-4">
               {/* X/Twitter */}
               <a

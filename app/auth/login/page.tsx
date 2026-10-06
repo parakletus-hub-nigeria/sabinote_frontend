@@ -7,6 +7,7 @@ import { IconEye, IconEyeOff } from "@/components/icons";
 import { useLoginMutation } from "@/lib/services/authApi";
 import { setCredentials } from "@/lib/slices/authSlice";
 import { useAppDispatch } from "@/lib/hooks";
+import { ReleaseBadge } from "@/components/release";
 
 const LOGO_URL = "https://res.cloudinary.com/drh4ma3hj/image/upload/v1779473509/SabiNote_Purple_SVG_tlzlqm.svg";
 
@@ -190,6 +191,10 @@ export default function LoginPage() {
             <a href="#" className="underline underline-offset-2">Terms</a> and{" "}
             <a href="#" className="underline underline-offset-2">Privacy Policy</a>
           </p>
+
+          <div className="mt-8 pt-4 border-t border-gray-200/60 flex items-center justify-center">
+            <ReleaseBadge variant="light" className="text-[11px]" />
+          </div>
         </div>
       </div>
     </div>

@@ -1,13 +1,14 @@
 {
   "name": "sabinote_frontend",
-  "version": "0.1.0",
+  "version": "2.0.1",
   "private": true,
   "scripts": {
     "dev": "next dev --webpack --port 3000",
     "build": "next build --webpack",
     "start": "next start --webpack",
     "lint": "eslint",
-    "seo:audit": "node scripts/seo-audit.mjs"
+    "seo:audit": "node scripts/seo-audit.mjs",
+    "release": "node scripts/bump-release.js"
   },
   "dependencies": {
     "@paystack/inline-js": "^2.23.1",
