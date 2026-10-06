@@ -62,6 +62,17 @@ export interface NERDCPresentationStep {
   duration?: string
 }
 
+export interface LessonPlanMisconception {
+  description: string
+  reason: string
+  correction: string
+}
+
+export interface LessonPlanDifferentiation {
+  support: string
+  extension: string
+}
+
 export interface LessonPlan {
   metadata: LessonPlanMetadata
   referenceBooks: string[]
@@ -70,6 +81,8 @@ export interface LessonPlan {
   previousKnowledge: string
   objectives: LessonPlanObjectives
   presentation: NERDCPresentationStep[]
+  commonMisconceptions?: LessonPlanMisconception[]
+  differentiation?: LessonPlanDifferentiation
   evaluation: string[]
   summary: string
   assignment: string
