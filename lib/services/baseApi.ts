@@ -8,7 +8,16 @@ import {
 import { setCredentials, clearCredentials } from '../slices/authSlice'
 import type { RootState } from '../store'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1'
+export const AZURE_API_URL =
+  'https://sabinote-backend-hmdmbjdzfcddgghf.switzerlandnorth-01.azurewebsites.net/api/v1'
+
+export const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
+    ? AZURE_API_URL
+    : process.env.NODE_ENV === 'production'
+      ? AZURE_API_URL
+      : 'http://localhost:3000/api/v1')
 
 // Lightweight async Mutex to synchronize concurrent 401 token refreshes and prevent reuse race conditions
 class Mutex {
