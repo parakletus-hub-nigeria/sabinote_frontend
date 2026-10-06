@@ -9,6 +9,7 @@ import { useGetNoteQuery, useUpdateNoteMutation } from "@/lib/services/notesApi"
 import { useRegenerateMutation } from "@/lib/services/generateApi";
 import { useGetWalletQuery } from "@/lib/services/walletApi";
 import { baseApi } from "@/lib/services/baseApi";
+import { TeacherFeedbackWidget } from "@/components/notes/TeacherFeedbackWidget";
 import type { LessonPlan, LessonNote, LessonPlanObjectives } from "@/lib/types";
 
 // ─── Plain-text hygiene ───────────────────────────────────────────────────────
@@ -1620,25 +1621,65 @@ export default function CanvasPage() {
         <div className="canvas-sheet w-full min-w-0">
         {/* Document header */}
         <div className="px-5 pt-7 pb-1">
-          <div className="flex flex-wrap items-center gap-2 mb-2.5">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/90 shadow-2xs">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
-              </span>
-              2025 NERDC Scheme Verified
-            </span>
-            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border shadow-2xs ${getStageBadge(note.classLevel).color}`}>
-              {getStageBadge(note.classLevel).label}
-            </span>
-          </div>
+          {(() => {
+            const grounding = note?.grounding || (plan as any)?._grounding || (lessonNote as any)?._grounding;
+            return (
+              <>
+                <div className="flex flex-wrap items-center gap-2 mb-2.5">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/90 shadow-2xs">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+                    </span>
+                    2025 NERDC Scheme Verified
+                  </span>
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border shadow-2xs ${getStageBadge(note.classLevel).color}`}>
+                    {getStageBadge(note.classLevel).label}
+                  </span>
+                  {grounding && (
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border shadow-2xs ${
+                        grounding.score >= 80
+                          ? "bg-teal-50 text-teal-800 border-teal-200/90"
+                          : grounding.score >= 70
+                          ? "bg-amber-50 text-amber-800 border-amber-200/90"
+                          : "bg-rose-50 text-rose-800 border-rose-200/90"
+                      }`}
+                      title={`Grounding Fidelity: ${grounding.score}% alignment with canonical NERDC syllabus objectives`}
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      </svg>
+                      {grounding.score}% NERDC Alignment
+                    </span>
+                  )}
+                </div>
 
-          <h1
-            className="text-[26px] font-bold leading-tight font-display mb-3"
-            style={{ color: "oklch(10% 0.01 290)" }}
-          >
-            {note.topic}
-          </h1>
+                <h1
+                  className="text-[26px] font-bold leading-tight font-display mb-3"
+                  style={{ color: "oklch(10% 0.01 290)" }}
+                >
+                  {note.topic}
+                </h1>
+
+                {grounding && grounding.score < 70 && (
+                  <div className="mb-3.5 p-3 bg-amber-50/90 border border-amber-200 rounded-xl text-[13px] text-amber-900 flex items-start gap-2.5">
+                    <svg className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <div>
+                      <p className="font-semibold text-[13px]">Curriculum Alignment Warning ({grounding.score}% syllabus match)</p>
+                      <p className="text-[12px] text-amber-800 mt-0.5">
+                        Generated plan objectives show minor drift from canonical national NERDC standards. Please review behavioral objectives before class presentation.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <span
@@ -1722,6 +1763,11 @@ export default function CanvasPage() {
               <Section label="Assignment" onEdit={() => openEditor("Assignment", "assignment")}>
                 <ProseBlock v={plan.assignment} />
               </Section>
+              <TeacherFeedbackWidget
+                noteId={note.noteId}
+                existingFeedback={note.feedback || (plan as any)?._feedback}
+                telemetry={note.telemetry || (plan as any)?._telemetry}
+              />
             </div>
           )}
           {phase === "plan" && !plan && (
@@ -1768,6 +1814,11 @@ export default function CanvasPage() {
               <Section label="Assignment" onEdit={() => openEditor("Assignment", "assignment")}>
                 <ListBlock items={lessonNote.assignment} numbered />
               </Section>
+              <TeacherFeedbackWidget
+                noteId={note.noteId}
+                existingFeedback={note.feedback || (lessonNote as any)?._feedback || (plan as any)?._feedback}
+                telemetry={note.telemetry || (lessonNote as any)?._telemetry || (plan as any)?._telemetry}
+              />
             </div>
           )}
           {phase === "note" && !generatingNote && !lessonNote && (

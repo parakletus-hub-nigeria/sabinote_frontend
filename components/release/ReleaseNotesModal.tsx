@@ -11,7 +11,7 @@ interface ReleaseNotesModalProps {
 }
 
 export function ReleaseNotesModal({ isOpen, onClose }: ReleaseNotesModalProps) {
-  const [activeTab, setActiveTab] = useState<'current' | 'guide' | 'history'>('current');
+  const [activeTab, setActiveTab] = useState<'current' | 'comparison' | 'guide' | 'history'>('current');
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<HistoricReleaseItem | null>(null);
 
   const manifest = PLATFORM_RELEASE_MANIFEST;
@@ -120,6 +120,23 @@ export function ReleaseNotesModal({ isOpen, onClose }: ReleaseNotesModalProps) {
           >
             What&apos;s New
             {activeTab === 'current' && (
+              <span
+                className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
+                style={{ background: '#641BC4' }}
+              />
+            )}
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('comparison');
+              setSelectedHistoryItem(null);
+            }}
+            className={`pb-2.5 transition-colors relative active:scale-[0.97] ${
+              activeTab === 'comparison' ? 'text-[#641BC4] font-semibold' : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Why It Matters to Teachers
+            {activeTab === 'comparison' && (
               <span
                 className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
                 style={{ background: '#641BC4' }}
@@ -260,6 +277,71 @@ export function ReleaseNotesModal({ isOpen, onClose }: ReleaseNotesModalProps) {
                 </div>
               </div>
             </>
+          )}
+
+          {activeTab === 'comparison' && (
+            <div className="space-y-4">
+              <div
+                className="rounded-xl p-4 border"
+                style={{
+                  background: 'linear-gradient(135deg, #FAF5FF 0%, #F5EEFD 100%)',
+                  borderColor: '#E9D5FF',
+                }}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="w-2 h-2 rounded-full bg-[#641BC4]" />
+                  <h4 className="text-xs font-bold text-[#641BC4] uppercase tracking-wider">
+                    Educator-First Comparison Guide
+                  </h4>
+                </div>
+                <p className="text-xs text-gray-700 leading-relaxed">
+                  We transformed every system upgrade into concrete classroom advantages. Here is exactly what changed, why it matters for your teaching, and a practical classroom tip for every feature.
+                </p>
+              </div>
+
+              <div className="space-y-3.5">
+                {current.educationalComparison?.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-xl border border-gray-100 bg-white hover:border-purple-200 hover:shadow-xs transition-all space-y-2.5"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-purple-100 text-[#641BC4] flex items-center justify-center text-[10px] font-bold">
+                        {idx + 1}
+                      </span>
+                      <h4 className="text-sm font-bold text-gray-900 tracking-tight">
+                        {item.feature}
+                      </h4>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs pt-1">
+                      <div className="p-2.5 rounded-lg bg-gray-50/80 border border-gray-100">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
+                          What Was Upgraded
+                        </p>
+                        <p className="text-gray-700 leading-relaxed">
+                          {item.whatChanged}
+                        </p>
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-purple-50/50 border border-purple-100">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-[#641BC4] mb-1">
+                          Why It Matters To You
+                        </p>
+                        <p className="text-purple-950 font-medium leading-relaxed">
+                          {item.whyItMattersToTeachers}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-emerald-50/70 border border-emerald-100 text-[11px] text-emerald-900">
+                      <span className="shrink-0 text-emerald-600 font-bold mt-0.5">💡 Tip:</span>
+                      <span className="leading-relaxed font-medium">{item.classroomTip}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           {activeTab === 'guide' && (

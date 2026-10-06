@@ -128,11 +128,36 @@ export interface Note {
   createdAt: string
 }
 
+export interface NoteFeedback {
+  rating?: number
+  sentiment?: 'thumbs_up' | 'thumbs_down'
+  tags?: string[]
+  comment?: string
+  submittedAt?: string
+}
+
+export interface EditTelemetry {
+  editedSections: string[]
+  characterDiffCount: number
+  totalEdits: number
+  lastEditedAt: string
+}
+
+export interface GroundingTelemetry {
+  score: number
+  stage: string
+  curriculumReleaseId?: string
+  curriculumUnitId?: string
+}
+
 export interface NoteDetail extends Note {
   state: string
   session?: string
-  lessonPlanContent: LessonPlan | null
-  lessonNoteContent: LessonNote | null
+  lessonPlanContent: (LessonPlan & { _feedback?: NoteFeedback; _telemetry?: EditTelemetry; _grounding?: GroundingTelemetry }) | null
+  lessonNoteContent: (LessonNote & { _feedback?: NoteFeedback; _telemetry?: EditTelemetry; _grounding?: GroundingTelemetry }) | null
+  feedback?: NoteFeedback | null
+  telemetry?: EditTelemetry | null
+  grounding?: GroundingTelemetry | null
   exportCount: number
   updatedAt: string
 }
