@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { IconBack, IconBolt } from "@/components/icons";
+import { IconBack, IconBolt, IconCheck, IconPlus } from "@/components/icons";
 import {
   useGetCurriculumSubjectsQuery,
   useGetCurriculumWeeksQuery,
+  useGetCurriculumWeekQuery,
 } from "@/lib/services/curriculumApi";
 import { useGenerateLessonPlanMutation } from "@/lib/services/generateApi";
 import { useGetMeQuery } from "@/lib/services/authApi";
@@ -18,6 +19,38 @@ const CLASSES = CLASS_LEVELS_UI;
 // may use "SSS1/SSS2/SSS3". Normalise to 2-S form so both sources match.
 const toApiClass = (c: string) => c.replace(" ", "").replace(/^SSS/, "SS");
 const DURATIONS = [30, 40, 45, 60, 80];
+
+const PEDAGOGICAL_OPTIONS: Array<{
+  id: "standard" | "hands_on" | "exam_focus" | "remedial";
+  title: string;
+  subtitle: string;
+  badge: string;
+}> = [
+  {
+    id: "standard",
+    title: "Standard",
+    subtitle: "Balanced depth & evaluation",
+    badge: "Recommended",
+  },
+  {
+    id: "hands_on",
+    title: "Hands-On",
+    subtitle: "Practical pupil activities & realia",
+    badge: "Interactive",
+  },
+  {
+    id: "exam_focus",
+    title: "Exam Focus",
+    subtitle: "WAEC / BECE marking scheme alignment",
+    badge: "High Yield",
+  },
+  {
+    id: "remedial",
+    title: "Remedial",
+    subtitle: "Step-by-step scaffolding for learners",
+    badge: "Scaffolded",
+  },
+];
 
 function SectionLabel({ step, label }: { step: string; label: string }) {
   return (
@@ -53,10 +86,21 @@ export default function GeneratePage() {
   const [selectedWeek, setSelectedWeek] = useState<{
     id: string;
     source: "release" | "state" | "general";
+    weekNumber: number;
+    topic: string;
   } | null>(null);
   const selectedWeekId = selectedWeek?.id ?? null;
+
   const [duration, setDuration] = useState(40);
   const [statusIdx, setStatusIdx] = useState(0);
+
+  // Phase 2 additions
+  const [selectedAids, setSelectedAids] = useState<string[]>([]);
+  const [customAidInput, setCustomAidInput] = useState("");
+  const [pedagogicalEmphasis, setPedagogicalEmphasis] = useState<
+    "standard" | "hands_on" | "exam_focus" | "remedial"
+  >("standard");
+  const [showSchemeDetails, setShowSchemeDetails] = useState(false);
 
   const profileState = meData?.data?.state ?? "";
   const resolvedState = state || profileState;
@@ -78,6 +122,83 @@ export default function GeneratePage() {
       { skip: !resolvedState || !subject || !classLevel },
     );
 
+  // Fetch full canonical week details for the live scheme preview card
+  const { data: weekDetailData, isFetching: loadingWeekDetail } =
+    useGetCurriculumWeekQuery(
+      {
+        state: resolvedState,
+        subject,
+        classLevel: toApiClass(classLevel),
+        term,
+        week: selectedWeek?.weekNumber ?? 1,
+      },
+      {
+        skip:
+          !resolvedState ||
+          !subject ||
+          !classLevel ||
+          !selectedWeek?.weekNumber,
+      },
+    );
+
+  const weekDetail = weekDetailData?.data;
+
+  // Extract suggested learning aids from canonical week or fallbacks
+  const suggestedAids = useMemo(() => {
+    if (!weekDetail?.teachingAids) {
+      return [
+        "Chalkboard & coloured chalks",
+        "Approved textbook & wall charts",
+        "Real-world illustrative models",
+        "Flashcards & activity worksheets",
+      ];
+    }
+    const raw = weekDetail.teachingAids;
+    const splitAids = raw
+      .split(/[,;\n•]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 2);
+
+    return splitAids.length > 0
+      ? splitAids
+      : [
+          "Chalkboard & coloured chalks",
+          "Approved textbook & wall charts",
+          "Real-world illustrative models",
+          "Flashcards & activity worksheets",
+        ];
+  }, [weekDetail?.teachingAids]);
+
+  // Pre-select first 3 suggested aids when a new week is loaded
+  useEffect(() => {
+    if (suggestedAids.length > 0 && selectedAids.length === 0) {
+      setSelectedAids(suggestedAids.slice(0, 3));
+    }
+  }, [suggestedAids, selectedAids.length]);
+
+  // Proportional pacing calculation based on duration
+  const pacing = useMemo(() => {
+    const step1 = Math.max(3, Math.round(duration * 0.125));
+    const step3 = Math.max(5, Math.round(duration * 0.25));
+    const step2 = duration - step1 - step3;
+    return { step1, step2, step3 };
+  }, [duration]);
+
+  const toggleAid = (aid: string) => {
+    setSelectedAids((prev) =>
+      prev.includes(aid) ? prev.filter((a) => a !== aid) : [...prev, aid],
+    );
+  };
+
+  const handleAddCustomAid = () => {
+    const trimmed = customAidInput.trim();
+    if (!trimmed) return;
+    if (!selectedAids.includes(trimmed)) {
+      setSelectedAids((prev) => [...prev, trimmed]);
+    }
+    setCustomAidInput("");
+  };
+
   const [generateLessonPlan, { isLoading: generating }] =
     useGenerateLessonPlanMutation();
 
@@ -90,6 +211,7 @@ export default function GeneratePage() {
   const statusMessages = [
     `Connecting to ${resolvedState || "state"} curriculum database...`,
     "Fetching scheme of work...",
+    "Grounding pedagogy to stage & standards...",
     "Structuring your lesson plan...",
   ];
 
@@ -101,6 +223,7 @@ export default function GeneratePage() {
         idx = (idx + 1) % statusMessages.length;
         setStatusIdx(idx);
       }, 1400);
+
       const payload = {
         durationMinutes: duration,
         ...(selectedWeek.source === "release"
@@ -108,7 +231,10 @@ export default function GeneratePage() {
           : selectedWeek.source === "state"
           ? { curriculumWeekId: selectedWeek.id }
           : { generalCurriculumId: selectedWeek.id }),
+        learningAids: selectedAids.length > 0 ? selectedAids : undefined,
+        pedagogicalEmphasis,
       };
+
       const res = await generateLessonPlan(payload).unwrap();
       clearInterval(interval);
       router.push(`/notes/${res.data.noteId}`);
@@ -263,6 +389,7 @@ export default function GeneratePage() {
                 setState(e.target.value);
                 setSubject("");
                 setSelectedWeek(null);
+                setSelectedAids([]);
               }}
               className={selectClass}
               style={selectStyle}
@@ -301,6 +428,7 @@ export default function GeneratePage() {
                   setClassLevel(e.target.value);
                   setSubject("");
                   setSelectedWeek(null);
+                  setSelectedAids([]);
                 }}
                 className={selectClass}
                 style={selectStyle}
@@ -322,6 +450,7 @@ export default function GeneratePage() {
                 onChange={(e) => {
                   setSubject(e.target.value);
                   setSelectedWeek(null);
+                  setSelectedAids([]);
                 }}
                 disabled={
                   !classLevel ||
@@ -369,8 +498,9 @@ export default function GeneratePage() {
                 onClick={() => {
                   setTerm(t);
                   setSelectedWeek(null);
+                  setSelectedAids([]);
                 }}
-                className="py-2.5 rounded-lg text-sm font-semibold transition-all"
+                className="py-2.5 rounded-lg text-sm font-semibold transition-all active:scale-[0.98]"
                 style={
                   term === t
                     ? {
@@ -446,10 +576,16 @@ export default function GeneratePage() {
                 return (
                   <button
                     key={w.id}
-                    onClick={() =>
-                      setSelectedWeek({ id: w.id, source: w.source })
-                    }
-                    className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left transition-all"
+                    onClick={() => {
+                      setSelectedWeek({
+                        id: w.id,
+                        source: w.source,
+                        weekNumber: w.week,
+                        topic: w.topic,
+                      });
+                      setSelectedAids([]);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left transition-all active:scale-[0.98]"
                     style={
                       isSelected
                         ? {
@@ -519,15 +655,222 @@ export default function GeneratePage() {
           )}
         </div>
 
-        {/* Step 5: Duration */}
+        {/* ── Live Scheme Preview Card (When Week is Selected) ── */}
+        {selectedWeek && (
+          <div className="rounded-2xl p-4.5 border transition-all duration-200 bg-linear-to-b from-purple-50/40 via-white to-white border-purple-200/70 shadow-xs">
+            {/* Header / Provenance badge */}
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/90">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+                </span>
+                {selectedWeek.source === "release"
+                  ? "2025 NERDC Scheme Verified"
+                  : selectedWeek.source === "state"
+                  ? `${resolvedState} State Approved`
+                  : "National Scheme Baseline"}
+              </span>
+              <span className="text-[11px] font-mono font-medium text-gray-500">
+                Wk {selectedWeek.weekNumber} • Term {term}
+              </span>
+            </div>
+
+            {/* Topic title */}
+            <h3 className="text-base font-bold text-gray-900 leading-snug">
+              {weekDetail?.topic ?? selectedWeek.topic}
+            </h3>
+
+            {/* Sub-topics pills */}
+            {weekDetail?.subTopics && weekDetail.subTopics.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2.5">
+                {weekDetail.subTopics.map((st, idx) => (
+                  <span
+                    key={idx}
+                    className="text-[11px] font-medium px-2.5 py-0.5 rounded-lg bg-purple-50/70 border border-purple-100 text-purple-900"
+                  >
+                    {st}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Performance Objectives checklist */}
+            {weekDetail?.objectives && weekDetail.objectives.length > 0 && (
+              <div className="mt-3.5 pt-3 border-t border-purple-100/70">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-purple-900/70 mb-2">
+                  Expected Learning Outcomes
+                </p>
+                <div className="space-y-1.5">
+                  {weekDetail.objectives.map((obj, i) => (
+                    <div
+                      key={i}
+                      className="flex items-start gap-2 text-xs text-gray-700 leading-relaxed"
+                    >
+                      <span className="w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 mt-0.5 text-[10px] font-bold">
+                        ✓
+                      </span>
+                      <span>{obj}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Collapsible Teaching Activities & Evaluation Guide */}
+            {(weekDetail?.teachingActivities ||
+              (weekDetail?.competencies && weekDetail.competencies.length > 0) ||
+              weekDetail?.evaluation) && (
+              <div className="mt-3 pt-2.5 border-t border-purple-100/60">
+                <button
+                  type="button"
+                  onClick={() => setShowSchemeDetails((prev) => !prev)}
+                  className="text-xs font-semibold text-purple-900 hover:text-purple-950 flex items-center gap-1.5 transition-colors active:scale-[0.98]"
+                >
+                  <span>
+                    {showSchemeDetails
+                      ? "Hide Official Activities & Evaluation"
+                      : "View Official Activities & Evaluation Guide"}
+                  </span>
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    className={`transition-transform duration-200 ${
+                      showSchemeDetails ? "rotate-180" : ""
+                    }`}
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+
+                {showSchemeDetails && (
+                  <div className="mt-2.5 space-y-2.5 text-xs text-gray-700 bg-white/90 p-3 rounded-xl border border-purple-100">
+                    {weekDetail.teachingActivities && (
+                      <div>
+                        <span className="font-semibold text-gray-900 block mb-0.5">
+                          Teaching Activities:
+                        </span>
+                        <p className="text-gray-600 leading-relaxed">
+                          {weekDetail.teachingActivities}
+                        </p>
+                      </div>
+                    )}
+                    {weekDetail.competencies &&
+                      weekDetail.competencies.length > 0 && (
+                        <div>
+                          <span className="font-semibold text-gray-900 block mb-0.5">
+                            National Core Competencies:
+                          </span>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {weekDetail.competencies.map((comp, ci) => (
+                              <span
+                                key={ci}
+                                className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200"
+                              >
+                                {comp}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    {weekDetail.evaluation && (
+                      <div>
+                        <span className="font-semibold text-gray-900 block mb-0.5">
+                          Evaluation Guide:
+                        </span>
+                        <p className="text-gray-600 leading-relaxed">
+                          {weekDetail.evaluation}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Step 5: Classroom Learning Aids */}
+        {selectedWeek && (
+          <div>
+            <SectionLabel step="5" label="Classroom Learning Aids" />
+            <p className="text-xs text-gray-500 mb-2.5">
+              Select or add instructional materials available in your classroom.
+            </p>
+            <div className="flex flex-wrap gap-1.5 mb-2.5">
+              {suggestedAids.map((aid) => {
+                const isSelected = selectedAids.includes(aid);
+                return (
+                  <button
+                    key={aid}
+                    type="button"
+                    onClick={() => toggleAid(aid)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-medium border flex items-center gap-1.5 transition-all active:scale-[0.97]"
+                    style={
+                      isSelected
+                        ? {
+                            background: "oklch(40% 0.22 290)",
+                            color: "white",
+                            borderColor: "oklch(40% 0.22 290)",
+                          }
+                        : {
+                            background: "white",
+                            color: "#374151",
+                            borderColor: "var(--color-border)",
+                          }
+                    }
+                  >
+                    {isSelected ? (
+                      <IconCheck className="w-3.5 h-3.5 shrink-0" />
+                    ) : (
+                      <IconPlus className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+                    )}
+                    <span>{aid}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Add Custom Aid Chip */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Add other teaching aid (e.g., globe, beaker, counters)..."
+                value={customAidInput}
+                onChange={(e) => setCustomAidInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddCustomAid();
+                  }
+                }}
+                className="flex-1 px-3 py-2 text-xs rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-purple-600"
+              />
+              <button
+                type="button"
+                onClick={handleAddCustomAid}
+                disabled={!customAidInput.trim()}
+                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-purple-700 disabled:opacity-40 transition-all active:scale-[0.97]"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 6: Duration & Pacing Visualizer */}
         <div>
-          <SectionLabel step="5" label="Duration" />
-          <div className="flex gap-2 flex-wrap">
+          <SectionLabel step="6" label="Duration &amp; Pacing" />
+          <div className="flex gap-2 flex-wrap mb-3.5">
             {DURATIONS.map((d) => (
               <button
                 key={d}
                 onClick={() => setDuration(d)}
-                className="px-4 py-2 rounded-xl text-sm font-semibold transition-all"
+                className="px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-[0.97]"
                 style={
                   duration === d
                     ? { background: "oklch(40% 0.22 290)", color: "white" }
@@ -541,6 +884,120 @@ export default function GeneratePage() {
                 {d} min
               </button>
             ))}
+          </div>
+
+          {/* Pacing Timeline Visualizer */}
+          <div className="p-3 rounded-2xl bg-white border border-gray-200/80 shadow-2xs">
+            <div className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-2">
+              <span>Pacing Breakdown ({duration} minutes)</span>
+              <span className="font-mono text-purple-700">100% Paced</span>
+            </div>
+
+            {/* Segmented Timeline Bar */}
+            <div className="h-2 rounded-full overflow-hidden flex bg-gray-100 mb-3">
+              <div
+                style={{ width: `${(pacing.step1 / duration) * 100}%` }}
+                className="bg-indigo-500 h-full"
+                title={`Step 1: ${pacing.step1} mins`}
+              />
+              <div
+                style={{ width: `${(pacing.step2 / duration) * 100}%` }}
+                className="bg-purple-600 h-full"
+                title={`Step 2: ${pacing.step2} mins`}
+              />
+              <div
+                style={{ width: `${(pacing.step3 / duration) * 100}%` }}
+                className="bg-emerald-500 h-full"
+                title={`Step 3: ${pacing.step3} mins`}
+              />
+            </div>
+
+            {/* Mini Step Breakdown Cards */}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="p-2 rounded-xl bg-indigo-50/60 border border-indigo-100/70">
+                <span className="block text-[10px] font-bold text-indigo-700 uppercase">
+                  Step 1 • {pacing.step1}m
+                </span>
+                <span className="text-[11px] text-gray-600">
+                  Intro &amp; Review
+                </span>
+              </div>
+              <div className="p-2 rounded-xl bg-purple-50/60 border border-purple-100/70">
+                <span className="block text-[10px] font-bold text-purple-700 uppercase">
+                  Step 2 • {pacing.step2}m
+                </span>
+                <span className="text-[11px] text-gray-600">
+                  Core Demonstration
+                </span>
+              </div>
+              <div className="p-2 rounded-xl bg-emerald-50/60 border border-emerald-100/70">
+                <span className="block text-[10px] font-bold text-emerald-700 uppercase">
+                  Step 3 • {pacing.step3}m
+                </span>
+                <span className="text-[11px] text-gray-600">
+                  Practice &amp; Eval
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Step 7: Pedagogical Focus & Teacher Tone */}
+        <div>
+          <SectionLabel step="7" label="Pedagogical Focus &amp; Tone" />
+          <div className="grid grid-cols-2 gap-2.5">
+            {PEDAGOGICAL_OPTIONS.map((opt) => {
+              const isSelected = pedagogicalEmphasis === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setPedagogicalEmphasis(opt.id)}
+                  className="p-3 rounded-2xl text-left border transition-all active:scale-[0.97]"
+                  style={
+                    isSelected
+                      ? {
+                          background: "oklch(40% 0.22 290)",
+                          borderColor: "oklch(40% 0.22 290)",
+                          color: "white",
+                        }
+                      : {
+                          background: "white",
+                          borderColor: "var(--color-border)",
+                          color: "#1f2937",
+                        }
+                  }
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold">{opt.title}</span>
+                    <span
+                      className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
+                      style={
+                        isSelected
+                          ? {
+                              background: "rgba(255,255,255,0.2)",
+                              color: "white",
+                            }
+                          : {
+                              background: "var(--color-primary-dim)",
+                              color: "oklch(40% 0.22 290)",
+                            }
+                      }
+                    >
+                      {opt.badge}
+                    </span>
+                  </div>
+                  <p
+                    className="text-[11px] leading-snug"
+                    style={{
+                      color: isSelected ? "rgba(255,255,255,0.85)" : "#6b7280",
+                    }}
+                  >
+                    {opt.subtitle}
+                  </p>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -594,7 +1051,7 @@ function GenerateCTA({
       <button
         onClick={onGenerate}
         disabled={!selectedWeekId || !canGenerate}
-        className="w-full py-4 rounded-2xl font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-40"
+        className="w-full py-4 rounded-2xl font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-40 transition-all active:scale-[0.98]"
         style={{ background: "oklch(40% 0.22 290)" }}
       >
         <IconBolt className="w-4.5 h-4.5" />

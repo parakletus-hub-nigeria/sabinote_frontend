@@ -19,6 +19,8 @@ export const generateApi = baseApi.injectEndpoints({
         curriculumUnitId?: string
         curriculumWeekId?: string
         generalCurriculumId?: string
+        learningAids?: string[]
+        pedagogicalEmphasis?: string
       }
     >({
       query: (body) => ({ url: '/generate/lesson-plan', method: 'POST', body }),
