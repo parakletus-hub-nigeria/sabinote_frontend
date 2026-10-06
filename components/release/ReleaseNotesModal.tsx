@@ -9,7 +9,7 @@ interface ReleaseNotesModalProps {
 }
 
 export function ReleaseNotesModal({ isOpen, onClose }: ReleaseNotesModalProps) {
-  const [activeTab, setActiveTab] = useState<'current' | 'history'>('current');
+  const [activeTab, setActiveTab] = useState<'current' | 'guide' | 'history'>('current');
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<HistoricReleaseItem | null>(null);
 
   const manifest = PLATFORM_RELEASE_MANIFEST;
@@ -73,7 +73,7 @@ export function ReleaseNotesModal({ isOpen, onClose }: ReleaseNotesModalProps) {
             <div>
               <div className="flex items-center gap-2">
                 <h2 id="release-modal-title" className="text-lg font-bold text-gray-900 tracking-tight">
-                  SabiNote Platform
+                  What&apos;s New in SabiNote
                 </h2>
                 <span
                   className="px-2.5 py-0.5 rounded-full text-xs font-semibold"
@@ -87,11 +87,11 @@ export function ReleaseNotesModal({ isOpen, onClose }: ReleaseNotesModalProps) {
                 </span>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Live & Stable
+                  Live &amp; Verified
                 </span>
               </div>
               <p className="text-xs text-gray-500 mt-0.5 font-medium">
-                {current.codename} • Released {current.releaseDate}
+                Official 2025 National Scheme of Work • Updated {current.releaseDate}
               </p>
             </div>
           </div>
@@ -119,8 +119,25 @@ export function ReleaseNotesModal({ isOpen, onClose }: ReleaseNotesModalProps) {
               activeTab === 'current' ? 'text-[#641BC4] font-semibold' : 'text-gray-500 hover:text-gray-800'
             }`}
           >
-            Current Release ({current.versionTag})
+            What&apos;s New
             {activeTab === 'current' && (
+              <span
+                className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
+                style={{ background: '#641BC4' }}
+              />
+            )}
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('guide');
+              setSelectedHistoryItem(null);
+            }}
+            className={`pb-2.5 transition-colors relative active:scale-[0.97] ${
+              activeTab === 'guide' ? 'text-[#641BC4] font-semibold' : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Teacher Guide &amp; Best Practices
+            {activeTab === 'guide' && (
               <span
                 className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
                 style={{ background: '#641BC4' }}
@@ -133,7 +150,7 @@ export function ReleaseNotesModal({ isOpen, onClose }: ReleaseNotesModalProps) {
               activeTab === 'history' ? 'text-[#641BC4] font-semibold' : 'text-gray-500 hover:text-gray-800'
             }`}
           >
-            Version Changelog ({manifest.history.length})
+            Release History ({manifest.history.length})
             {activeTab === 'history' && (
               <span
                 className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
@@ -145,7 +162,7 @@ export function ReleaseNotesModal({ isOpen, onClose }: ReleaseNotesModalProps) {
 
         {/* Content Body */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1 text-sm text-gray-700">
-          {activeTab === 'current' ? (
+          {activeTab === 'current' && (
             <>
               {/* Baseline Curriculum Metric Card */}
               <div
@@ -158,13 +175,13 @@ export function ReleaseNotesModal({ isOpen, onClose }: ReleaseNotesModalProps) {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <span className="text-[11px] font-bold uppercase tracking-wider text-[#641BC4]">
-                      Authoritative Curriculum Baseline
+                      2025 National Scheme of Work
                     </span>
                     <h3 className="text-base font-bold text-gray-900 mt-0.5">
-                      {current.curriculumBaseline.tag} Scheme of Work
+                      {current.curriculumBaseline.tag} Curriculum Integration
                     </h3>
                     <p className="text-xs text-gray-600 mt-1">
-                      Validated national curriculum archive sourced from {current.curriculumBaseline.authorities.join(' & ')}
+                      Verified Nigerian syllabus directly aligned with {current.curriculumBaseline.authorities.join(' & ')} guidelines.
                     </p>
                   </div>
                   <div className="flex sm:flex-col items-baseline sm:items-end gap-1 shrink-0 bg-white/80 backdrop-blur-sm px-3.5 py-2 rounded-lg border border-purple-100">
@@ -179,7 +196,7 @@ export function ReleaseNotesModal({ isOpen, onClose }: ReleaseNotesModalProps) {
                   <div className="bg-white/90 p-2.5 rounded-lg border border-purple-50">
                     <p className="text-[10px] text-gray-500 uppercase font-semibold">Early Years</p>
                     <p className="text-xs font-bold text-gray-800 mt-0.5">753 Units</p>
-                    <p className="text-[10px] text-gray-400">Pre-Nursery & Nursery</p>
+                    <p className="text-[10px] text-gray-400">Pre-Nursery &amp; Nursery</p>
                   </div>
                   <div className="bg-white/90 p-2.5 rounded-lg border border-purple-50">
                     <p className="text-[10px] text-gray-500 uppercase font-semibold">Primary</p>
@@ -199,10 +216,10 @@ export function ReleaseNotesModal({ isOpen, onClose }: ReleaseNotesModalProps) {
                 </div>
               </div>
 
-              {/* Release Highlights */}
+              {/* Educational Highlights */}
               <div>
                 <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-3">
-                  Key Capabilities in {current.versionTag}
+                  Key Improvements for Your Classroom
                 </h4>
                 <ul className="space-y-2.5">
                   {current.highlights.map((highlight, index) => (
@@ -223,34 +240,81 @@ export function ReleaseNotesModal({ isOpen, onClose }: ReleaseNotesModalProps) {
                 </ul>
               </div>
 
-              {/* Technical Specifications */}
-              <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
-                <h4 className="text-[11px] font-bold text-gray-900 uppercase tracking-wider mb-2">
-                  System Architecture & Integrity
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Architecture</span>
-                    <span className="text-gray-800 font-semibold">Dual-Read Curriculum Engine (ARCH-007)</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Security Standard</span>
-                    <span className="text-gray-800 font-semibold">Revocable Token Ledger & Role-Gated</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Traceability</span>
-                    <span className="text-gray-800 font-semibold">X-Correlation-ID Tracking (ARCH-014)</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">API Documentation</span>
-                    <span className="text-gray-800 font-semibold">Swagger OpenAPI /api-docs</span>
-                  </div>
+              {/* Classroom Value Proposition */}
+              <div
+                className="rounded-xl p-4 border flex items-center gap-3.5"
+                style={{ background: '#FAF5FF', borderColor: '#E9D5FF' }}
+              >
+                <div
+                  className="w-9 h-9 rounded-lg flex items-center justify-center text-white shrink-0"
+                  style={{ background: '#641BC4' }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                  </svg>
+                </div>
+                <div>
+                  <h5 className="text-xs font-bold text-purple-950">Save 4+ Hours Weekly on Lesson Planning</h5>
+                  <p className="text-[11px] text-purple-900/80 mt-0.5 leading-relaxed">
+                    You no longer need to photocopy schemes of work or manually draft step presentations. Every note generated matches what school inspectors expect to see during classroom observation.
+                  </p>
                 </div>
               </div>
             </>
-          ) : (
+          )}
+
+          {activeTab === 'guide' && (
+            <div className="space-y-5">
+              <div className="bg-purple-50/60 p-4 rounded-xl border border-purple-100">
+                <h4 className="text-xs font-bold text-[#641BC4] uppercase tracking-wider mb-1">
+                  Educator Playbook: Getting the Best Notes
+                </h4>
+                <p className="text-xs text-gray-600">
+                  Follow these 5 recommended steps to generate classroom-ready, inspector-compliant lesson notes every week.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {current.teacherGuide?.map((guide, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3.5 rounded-xl border border-gray-100 bg-white hover:border-purple-200 transition-colors flex gap-3.5 items-start"
+                  >
+                    <div
+                      className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-bold text-white mt-0.5"
+                      style={{ background: '#641BC4' }}
+                    >
+                      {idx + 1}
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-gray-900">{guide.step}</h5>
+                      <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                        {guide.description}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Inspection Readiness Callout */}
+              <div className="p-4 rounded-xl border border-emerald-100 bg-emerald-50/60 text-xs text-emerald-900 space-y-1">
+                <span className="font-bold flex items-center gap-1.5 text-emerald-800">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                    <polyline points="22 4 12 14.01 9 11.01" />
+                  </svg>
+                  Inspection Readiness Guarantee
+                </span>
+                <p className="text-[11px] text-emerald-800/90 leading-relaxed">
+                  All generated lesson notes strictly adhere to the Federal Ministry of Education and NAPPS five-step presentation format: Introduction, Content Development, Pupil Activity, Summary/Evaluation, and Assignment.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'history' && (
             <div className="space-y-4">
-              {manifest.history.map((item, index) => (
+              {manifest.history.map((item) => (
                 <div
                   key={item.version}
                   className="p-4 rounded-xl border border-gray-100 bg-white hover:border-purple-200 hover:shadow-sm transition-all duration-150"
@@ -282,7 +346,7 @@ export function ReleaseNotesModal({ isOpen, onClose }: ReleaseNotesModalProps) {
 
                   {item.changes?.curriculum && (
                     <div className="mt-3 pt-3 border-t border-gray-100 text-[11px] text-gray-500">
-                      <span className="font-semibold text-gray-700">Curriculum Scope:</span>{' '}
+                      <span className="font-semibold text-gray-700">Scope:</span>{' '}
                       {item.changes.curriculum.join(' • ')}
                     </div>
                   )}
@@ -304,7 +368,7 @@ export function ReleaseNotesModal({ isOpen, onClose }: ReleaseNotesModalProps) {
             className="w-full sm:w-auto px-4 py-2 rounded-lg font-semibold text-white text-xs transition-all duration-150 active:scale-[0.97]"
             style={{ background: '#641BC4' }}
           >
-            Dismiss
+            Got it, thanks!
           </button>
         </div>
       </div>
