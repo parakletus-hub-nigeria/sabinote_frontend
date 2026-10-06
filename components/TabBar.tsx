@@ -26,7 +26,7 @@ export default function TabBar() {
 
           if (tab.isCenter) {
             return (
-              <Link key={tab.href} href={tab.href} className="flex flex-col items-center -mt-5">
+              <Link key={tab.href} href={tab.href} prefetch={true} className="flex flex-col items-center -mt-5">
                 <span
                   className="w-14 h-14 rounded-full flex items-center justify-center text-white"
                   style={{
@@ -41,7 +41,7 @@ export default function TabBar() {
           }
 
           return (
-            <Link key={tab.href} href={tab.href} className="flex flex-col items-center gap-1 min-w-12">
+            <Link key={tab.href} href={tab.href} prefetch={true} className="flex flex-col items-center gap-1 min-w-12">
               <span style={{ color: isActive ? "oklch(40% 0.22 290)" : "var(--color-text-muted)" }}
                 className="transition-colors duration-150">
                 <tab.icon />

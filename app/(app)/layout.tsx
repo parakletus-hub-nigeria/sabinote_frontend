@@ -35,6 +35,7 @@ function SidebarLink({
   return (
     <Link
       href={href}
+      prefetch={true}
       className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-colors text-sm font-medium"
       style={active
         ? { background: "var(--color-primary-dim)", color: "oklch(40% 0.22 290)" }

@@ -5,6 +5,22 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [2.0.2] - 2026-10-06
+### Added
+- **Live 2025 Scheme Preview & Period Pacing Engine**:
+  - Live preview card with interactive Bloom's learning outcomes checklist.
+  - Classroom learning aids chip selector with custom school resource adder.
+  - Proportional period pacing visualizer (30m to 80m).
+  - Pedagogical focus toggle (Standard, Hands-On, Exam Focus, Remedial).
+  - Inspector-ready chalkboard/whiteboard layouts and differentiation blocks.
+- **Reliability & Navigation Speed Optimizations**:
+  - Concurrent token refresh Mutex in `baseApi.ts` preventing race-condition session revocations.
+  - Instant prefetching (`prefetch={true}`) on desktop sidebar and mobile navigation tabs.
+  - 5-minute cache retention (`keepUnusedDataFor: 300`) and non-blocking background revalidation across RTK Query endpoints.
+  - Default package fallbacks and resilient balance selectors on `/wallet`.
+
+---
+
 ## [2.0.1] - 2026-10-06
 ### Added
 - **Global Release Badge & Footer (`ReleaseBadge`, `ReleaseFooter`)**:

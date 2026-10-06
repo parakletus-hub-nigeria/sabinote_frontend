@@ -2,14 +2,23 @@
 
 import { useEffect, useState } from "react";
 import { IconCheck } from "@/components/icons";
+import { useAppSelector } from "@/lib/hooks";
+import { selectWallet, selectCurrentUser } from "@/lib/slices/authSlice";
 import {
   useGetPackagesQuery,
   useGetWalletQuery,
   useGetTransactionsQuery,
   useManualTopupMutation,
+  type WalletPackage,
 } from "@/lib/services/walletApi";
 
 type PayState = "idle" | "submitting" | "success" | "failed";
+
+const DEFAULT_PACKAGES: WalletPackage[] = [
+  { id: "pkg_50", parats: 50, priceNGN: 250 },
+  { id: "pkg_100", parats: 100, priceNGN: 500 },
+  { id: "pkg_500", parats: 500, priceNGN: 2000 },
+];
 
 const PACKAGE_META: Record<
   string,
@@ -27,6 +36,8 @@ const PACKAGE_META: Record<
 export default function WalletPage() {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [payState, setPayState] = useState<PayState>("idle");
+  const authWallet = useAppSelector(selectWallet);
+  const authUser = useAppSelector(selectCurrentUser);
 
   const { data: pkgData, isLoading: packagesLoading, isError: packagesError } = useGetPackagesQuery();
   const {
@@ -43,8 +54,11 @@ export default function WalletPage() {
   } = useGetTransactionsQuery({ limit: 20 });
   const [manualTopup] = useManualTopupMutation();
 
-  const packages = pkgData?.data?.packages ?? [];
-  const balance = walletData?.data?.balance ?? "0";
+  const packages =
+    pkgData?.data?.packages && pkgData.data.packages.length > 0
+      ? pkgData.data.packages
+      : DEFAULT_PACKAGES;
+  const balance = walletData?.data?.balance ?? authWallet?.balance ?? "0";
   const transactions = txData?.data?.transactions ?? [];
   const estimatedLessons = Math.floor(Number(balance) / 20);
 
@@ -111,7 +125,7 @@ export default function WalletPage() {
               >
                 Available
               </p>
-              {walletLoading ? (
+              {walletLoading && !walletData && !authWallet?.balance ? (
                 <div
                   className="rounded-lg animate-pulse"
                   style={{
@@ -120,7 +134,7 @@ export default function WalletPage() {
                     background: "var(--color-border)",
                   }}
                 />
-              ) : walletError ? (
+              ) : walletError && !walletData && !authWallet?.balance ? (
                 <p
                   className="text-sm font-medium"
                   style={{ color: "#DC2626" }}
@@ -144,8 +158,8 @@ export default function WalletPage() {
               {walletError ? (
                 <button
                   onClick={() => refetchWallet()}
-                  className="text-xs font-semibold"
-                  style={{ color: "oklch(40% 0.22 290)" }}
+                  className="text-xs font-semibold px-2 py-1 rounded transition"
+                  style={{ color: "oklch(40% 0.22 290)", background: "var(--color-primary-dim)" }}
                 >
                   Retry
                 </button>
@@ -308,7 +322,7 @@ export default function WalletPage() {
             );
           })}
 
-          {packagesLoading &&
+          {packagesLoading && packages.length === 0 &&
             [0, 1, 2].map((i) => (
               <div
                 key={i}
@@ -321,7 +335,7 @@ export default function WalletPage() {
               />
             ))}
 
-          {!packagesLoading && packagesError && (
+          {!packagesLoading && packagesError && packages.length === 0 && (
             <div
               className="rounded-2xl p-6 text-center"
               style={{
@@ -336,8 +350,8 @@ export default function WalletPage() {
                 Couldn&apos;t load packages.
               </p>
               <button
-                className="text-xs font-semibold"
-                style={{ color: "oklch(40% 0.22 290)" }}
+                className="text-xs font-semibold px-2.5 py-1 rounded transition"
+                style={{ color: "oklch(40% 0.22 290)", background: "var(--color-primary-dim)" }}
               >
                 Retry
               </button>
@@ -398,7 +412,7 @@ export default function WalletPage() {
           History
         </h2>
 
-        {txLoading ? (
+        {txLoading && !txData ? (
           <div className="space-y-2.5">
             {[0, 1, 2].map((i) => (
               <div
@@ -408,7 +422,7 @@ export default function WalletPage() {
               />
             ))}
           </div>
-        ) : txError ? (
+        ) : txError && !txData ? (
           <div
             className="rounded-2xl p-6 text-center"
             style={{
@@ -421,8 +435,8 @@ export default function WalletPage() {
             </p>
             <button
               onClick={() => refetchTx()}
-              className="text-xs font-semibold"
-              style={{ color: "oklch(40% 0.22 290)" }}
+              className="text-xs font-semibold px-2.5 py-1 rounded transition"
+              style={{ color: "oklch(40% 0.22 290)", background: "var(--color-primary-dim)" }}
             >
               Retry
             </button>
