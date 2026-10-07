@@ -264,14 +264,11 @@ export default function GeneratePage() {
         friendlyMsg =
           rawMsg ||
           `Insufficient balance. You need ₽${planCost} Parats to generate this lesson plan.`;
-      } else if (
-        status === 503 ||
-        rawMsg?.toLowerCase().includes("ai generation failed")
-      ) {
-        friendlyMsg =
-          "AI generation is momentarily unavailable. No Parats were deducted. Please try again in a few moments.";
       } else if (rawMsg) {
         friendlyMsg = rawMsg;
+      } else if (status === 503) {
+        friendlyMsg =
+          "AI generation is momentarily unavailable. No Parats were deducted. Please try again in a few moments.";
       }
 
       setGenerateError({
