@@ -93,6 +93,10 @@ export default function GeneratePage() {
 
   const [duration, setDuration] = useState(40);
   const [statusIdx, setStatusIdx] = useState(0);
+  const [generateError, setGenerateError] = useState<{
+    message: string;
+    isBalanceError: boolean;
+  } | null>(null);
 
   // Phase 2 additions
   const [selectedAids, setSelectedAids] = useState<string[]>([]);
@@ -217,9 +221,11 @@ export default function GeneratePage() {
 
   async function handleGenerate() {
     if (!selectedWeek) return;
+    setGenerateError(null);
+    let interval: ReturnType<typeof setInterval> | null = null;
     try {
       let idx = 0;
-      const interval = setInterval(() => {
+      interval = setInterval(() => {
         idx = (idx + 1) % statusMessages.length;
         setStatusIdx(idx);
       }, 1400);
@@ -236,10 +242,44 @@ export default function GeneratePage() {
       };
 
       const res = await generateLessonPlan(payload).unwrap();
-      clearInterval(interval);
       router.push(`/notes/${res.data.noteId}`);
-    } catch {
-      // error handled by RTK
+    } catch (err: any) {
+      const status = err?.status;
+      const errCode = err?.data?.error?.code;
+      const details = err?.data?.error?.details;
+      const rawMsg =
+        (Array.isArray(details) ? details.join(", ") : null) ||
+        err?.data?.error?.message ||
+        err?.data?.message ||
+        err?.message;
+
+      const isBalance =
+        status === 402 ||
+        errCode === "PAYMENT_REQUIRED" ||
+        rawMsg?.includes("Insufficient Parats");
+
+      let friendlyMsg =
+        "Failed to generate lesson plan. Please check your network and try again.";
+      if (isBalance) {
+        friendlyMsg =
+          rawMsg ||
+          `Insufficient balance. You need ₽${planCost} Parats to generate this lesson plan.`;
+      } else if (
+        status === 503 ||
+        rawMsg?.toLowerCase().includes("ai generation failed")
+      ) {
+        friendlyMsg =
+          "AI generation is momentarily unavailable. No Parats were deducted. Please try again in a few moments.";
+      } else if (rawMsg) {
+        friendlyMsg = rawMsg;
+      }
+
+      setGenerateError({
+        message: friendlyMsg,
+        isBalanceError: isBalance,
+      });
+    } finally {
+      if (interval) clearInterval(interval);
     }
   }
 
@@ -378,6 +418,94 @@ export default function GeneratePage() {
         </p>
       </div>
 
+      {/* ── Generation Error Banner ── */}
+      {generateError && (
+        <div
+          role="alert"
+          className="mx-5 mb-5 p-4 rounded-2xl flex items-start gap-3.5 border transition-all animate-fade-in shadow-xs"
+          style={{
+            background: generateError.isBalanceError
+              ? "oklch(96% 0.04 40)"
+              : "oklch(96% 0.04 25)",
+            borderColor: generateError.isBalanceError
+              ? "oklch(82% 0.12 40)"
+              : "oklch(82% 0.12 25)",
+          }}
+        >
+          <div
+            className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
+            style={{
+              background: generateError.isBalanceError
+                ? "oklch(90% 0.08 40)"
+                : "oklch(90% 0.08 25)",
+              color: generateError.isBalanceError
+                ? "oklch(45% 0.18 40)"
+                : "oklch(45% 0.18 25)",
+            }}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p
+              className="text-xs font-bold uppercase tracking-wider mb-1"
+              style={{
+                color: generateError.isBalanceError
+                  ? "oklch(45% 0.18 40)"
+                  : "oklch(45% 0.18 25)",
+              }}
+            >
+              {generateError.isBalanceError
+                ? "Insufficient Parats"
+                : "Generation Error"}
+            </p>
+            <p
+              className="text-sm font-medium leading-relaxed"
+              style={{ color: "oklch(22% 0.02 290)" }}
+            >
+              {generateError.message}
+            </p>
+            <div className="mt-3 flex items-center gap-3">
+              {generateError.isBalanceError ? (
+                <Link
+                  href="/wallet"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-xs transition-all hover:opacity-90 active:scale-95"
+                  style={{ background: "oklch(40% 0.22 290)" }}
+                >
+                  Top up Parats →
+                </Link>
+              ) : (
+                <button
+                  onClick={handleGenerate}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-xs transition-all hover:opacity-90 active:scale-95"
+                  style={{ background: "oklch(40% 0.22 290)" }}
+                >
+                  Try again
+                </button>
+              )}
+              <button
+                onClick={() => setGenerateError(null)}
+                className="text-xs font-semibold px-2 py-1 rounded-lg text-gray-500 hover:text-gray-800 transition-colors"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="px-5 space-y-6 flex-1 pb-36">
         {/* Step 1: State */}
         <div>
@@ -390,6 +518,7 @@ export default function GeneratePage() {
                 setSubject("");
                 setSelectedWeek(null);
                 setSelectedAids([]);
+                setGenerateError(null);
               }}
               className={selectClass}
               style={selectStyle}
@@ -429,6 +558,7 @@ export default function GeneratePage() {
                   setSubject("");
                   setSelectedWeek(null);
                   setSelectedAids([]);
+                  setGenerateError(null);
                 }}
                 className={selectClass}
                 style={selectStyle}
@@ -451,6 +581,7 @@ export default function GeneratePage() {
                   setSubject(e.target.value);
                   setSelectedWeek(null);
                   setSelectedAids([]);
+                  setGenerateError(null);
                 }}
                 disabled={
                   !classLevel ||
@@ -499,6 +630,7 @@ export default function GeneratePage() {
                   setTerm(t);
                   setSelectedWeek(null);
                   setSelectedAids([]);
+                  setGenerateError(null);
                 }}
                 className="py-2.5 rounded-lg text-sm font-semibold transition-all active:scale-[0.98]"
                 style={
@@ -584,6 +716,7 @@ export default function GeneratePage() {
                         topic: w.topic,
                       });
                       setSelectedAids([]);
+                      setGenerateError(null);
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left transition-all active:scale-[0.98]"
                     style={
