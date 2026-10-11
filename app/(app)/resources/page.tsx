@@ -26,6 +26,16 @@ const RESOURCE_TYPE_COLORS: Record<Resource['resourceType'], string> = {
 }
 
 const CLASSES = CLASS_LEVELS
+const MAX_BYTES = 10 * 1024 * 1024
+
+function apiError(err: unknown, fallback: string) {
+  const e = err as { status?: number | string; data?: { message?: string | string[] } }
+  const msg = Array.isArray(e?.data?.message) ? e.data?.message[0] : e?.data?.message
+  if (msg) return msg
+  if (e?.status === 'FETCH_ERROR') return 'Network error — check your connection and try again.'
+  if (e?.status === 413) return 'File is too large for the server.'
+  return fallback
+}
 
 function ResourceCard({
   resource,
@@ -35,7 +45,7 @@ function ResourceCard({
 }: {
   resource: Resource
   isOwn: boolean
-  onDelete: (id: string) => void
+  onDelete: (id: string) => void | Promise<void>
   deleting: boolean
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -126,7 +136,11 @@ function UploadForm({ onSuccess }: { onSuccess: () => void }) {
   const [uploadResource, { isLoading }] = useUploadResourceMutation()
 
   const handleFile = useCallback((f: File) => {
-    if (f.size > 10 * 1024 * 1024) {
+    if (!/\.pdf$/i.test(f.name)) {
+      setError('Only PDF files are supported.')
+      return
+    }
+    if (f.size > MAX_BYTES) {
       setError('File must be under 10 MB.')
       return
     }
@@ -165,8 +179,8 @@ function UploadForm({ onSuccess }: { onSuccess: () => void }) {
       setState('')
       setError('')
       onSuccess()
-    } catch {
-      setError('Upload failed. Please try again.')
+    } catch (err) {
+      setError(apiError(err, 'Upload failed. Please try again.'))
     }
   }
 
@@ -190,9 +204,9 @@ function UploadForm({ onSuccess }: { onSuccess: () => void }) {
           ref={fileInputRef}
           id={fileId}
           type="file"
-          accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt"
+          accept=".pdf,application/pdf"
           className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }}
         />
         <IconUpload className="mx-auto w-8 h-8 text-gray-400 mb-2" />
         {file ? (
@@ -203,7 +217,7 @@ function UploadForm({ onSuccess }: { onSuccess: () => void }) {
         ) : (
           <>
             <p className="font-medium text-sm text-gray-700">Drop a file here or click to browse</p>
-            <p className="text-xs text-gray-400 mt-1">PDF, DOC, DOCX, PPT, XLS — max 10 MB</p>
+            <p className="text-xs text-gray-400 mt-1">PDF only — max 10 MB</p>
           </>
         )}
       </div>
@@ -292,8 +306,10 @@ export default function ResourcesPage() {
   const [showUploadForm, setShowUploadForm] = useState(false)
   const [typeFilter, setTypeFilter] = useState<Resource['resourceType'] | 'all'>('all')
 
-  const { data, isLoading, refetch } = useGetResourcesQuery()
-  const [deleteResource, { isLoading: deleting }] = useDeleteResourceMutation()
+  const { data, isLoading, isError, refetch } = useGetResourcesQuery()
+  const [deleteResource] = useDeleteResourceMutation()
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState('')
 
   const resources = data?.data ?? []
 
@@ -305,10 +321,14 @@ export default function ResourcesPage() {
   const publicResources = filtered.filter((r) => r.isPublic)
 
   async function handleDelete(resourceId: string) {
+    setDeletingId(resourceId)
+    setDeleteError('')
     try {
       await deleteResource(resourceId).unwrap()
-    } catch {
-      // error handled via RTK cache
+    } catch (err) {
+      setDeleteError(apiError(err, "Couldn't delete that resource. Please try again."))
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -341,7 +361,7 @@ export default function ResourcesPage() {
         {showUploadForm && (
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
             <h2 className="font-semibold text-gray-900 mb-4">Upload Resource</h2>
-            <UploadForm onSuccess={() => { setShowUploadForm(false); refetch() }} />
+            <UploadForm onSuccess={() => setShowUploadForm(false)} />
           </div>
         )}
 
@@ -362,11 +382,22 @@ export default function ResourcesPage() {
           ))}
         </div>
 
+        {deleteError && (
+          <p role="alert" className="text-xs text-red-600 font-medium bg-red-50 px-3 py-2 rounded-lg">{deleteError}</p>
+        )}
+
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
               <div key={i} className="bg-white rounded-xl h-20 animate-pulse border border-gray-100" />
             ))}
+          </div>
+        ) : isError ? (
+          <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
+            <p className="font-semibold text-gray-800">Couldn&apos;t load resources</p>
+            <button onClick={() => refetch()} className="mt-2 text-sm font-semibold text-(--color-primary)">
+              Try again
+            </button>
           </div>
         ) : resources.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center">
@@ -389,7 +420,7 @@ export default function ResourcesPage() {
                       resource={r}
                       isOwn={true}
                       onDelete={handleDelete}
-                      deleting={deleting}
+                      deleting={deletingId === r.resourceId}
                     />
                   ))}
                 </div>
@@ -407,7 +438,7 @@ export default function ResourcesPage() {
                       resource={r}
                       isOwn={false}
                       onDelete={handleDelete}
-                      deleting={deleting}
+                      deleting={deletingId === r.resourceId}
                     />
                   ))}
                 </div>

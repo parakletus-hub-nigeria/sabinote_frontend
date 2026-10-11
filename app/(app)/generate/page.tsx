@@ -11,6 +11,7 @@ import {
 import { useGenerateLessonPlanMutation } from "@/lib/services/generateApi";
 import { useGetMeQuery } from "@/lib/services/authApi";
 import { useGetWalletQuery } from "@/lib/services/walletApi";
+import { useGetResourcesQuery } from "@/lib/services/resourcesApi";
 import { CLASS_LEVELS_UI, NIGERIAN_STATES } from "@/lib/constants";
 
 const CLASSES = CLASS_LEVELS_UI;
@@ -18,6 +19,19 @@ const CLASSES = CLASS_LEVELS_UI;
 // may use "SSS1/SSS2/SSS3". Normalise to 2-S form so both sources match.
 const toApiClass = (c: string) => c.replace(" ", "").replace(/^SSS/, "SS");
 const DURATIONS = [30, 40, 45, 60, 80];
+
+const ChevronDown = () => (
+  <svg
+    width="13"
+    height="13"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+  >
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
 
 function SectionLabel({ step, label }: { step: string; label: string }) {
   return (
@@ -47,8 +61,11 @@ export default function GeneratePage() {
   const { data: walletData } = useGetWalletQuery();
 
   const [state, setState] = useState("");
-  const [subject, setSubject] = useState("");
-  const [classLevel, setClassLevel] = useState("");
+  const [subjectChoice, setSubject] = useState("");
+  const [classChoice, setClassLevel] = useState("");
+  const [resourceId, setResourceId] = useState("");
+  const [changingState, setChangingState] = useState(false);
+  const [error, setError] = useState("");
   const [term, setTerm] = useState(1);
   const [selectedWeek, setSelectedWeek] = useState<{
     id: string;
@@ -58,14 +75,29 @@ export default function GeneratePage() {
   const [duration, setDuration] = useState(40);
   const [statusIdx, setStatusIdx] = useState(0);
 
+  // Saved preferences (Settings → Preferences) pre-fill the form until the user picks something else
+  const prefs = meData?.data?.settings;
   const profileState = meData?.data?.state ?? "";
   const resolvedState = state || profileState;
+  const alwaysConfirmState = prefs?.alwaysConfirmState ?? true;
+  const showStatePicker = alwaysConfirmState || !profileState || changingState;
+  const defaultClass = CLASSES.includes(prefs?.defaultClassLevel ?? "")
+    ? (prefs?.defaultClassLevel as string)
+    : "";
+  const classLevel = classChoice || defaultClass;
 
   const { data: subjectsData, isFetching: loadingSubjects } =
     useGetCurriculumSubjectsQuery(
       { state: resolvedState, classLevel: toApiClass(classLevel) },
       { skip: !resolvedState || !classLevel },
     );
+
+  const subjects = subjectsData?.data?.subjects ?? [];
+  const defaultSubject =
+    prefs?.defaultSubject && subjects.includes(prefs.defaultSubject)
+      ? prefs.defaultSubject
+      : "";
+  const subject = subjectChoice || defaultSubject;
 
   const { data: weeksData, isFetching: loadingWeeks } =
     useGetCurriculumWeeksQuery(
@@ -80,8 +112,9 @@ export default function GeneratePage() {
 
   const [generateLessonPlan, { isLoading: generating }] =
     useGenerateLessonPlanMutation();
+  const { data: resourcesData } = useGetResourcesQuery();
+  const resources = resourcesData?.data ?? [];
 
-  const subjects = subjectsData?.data?.subjects ?? [];
   const weeks = weeksData?.data?.weeks ?? [];
   const balance = walletData?.data?.balance ?? "0";
   const planCost = 8;
@@ -95,23 +128,29 @@ export default function GeneratePage() {
 
   async function handleGenerate() {
     if (!selectedWeek) return;
+    setError("");
+    let interval: ReturnType<typeof setInterval> | undefined;
     try {
       let idx = 0;
-      const interval = setInterval(() => {
+      interval = setInterval(() => {
         idx = (idx + 1) % statusMessages.length;
         setStatusIdx(idx);
       }, 1400);
       const payload = {
         durationMinutes: duration,
+        ...(resourceId ? { resourceId } : {}),
         ...(selectedWeek.source === "state"
           ? { curriculumWeekId: selectedWeek.id }
           : { generalCurriculumId: selectedWeek.id }),
       };
       const res = await generateLessonPlan(payload).unwrap();
-      clearInterval(interval);
       router.push(`/notes/${res.data.noteId}`);
-    } catch {
-      // error handled by RTK
+    } catch (err) {
+      const data = (err as { data?: { message?: string | string[] } })?.data;
+      const msg = Array.isArray(data?.message) ? data?.message[0] : data?.message;
+      setError(msg || "Couldn't generate the lesson plan. Please try again.");
+    } finally {
+      clearInterval(interval);
     }
   }
 
@@ -127,18 +166,6 @@ export default function GeneratePage() {
     e.target.style.boxShadow = "none";
   };
 
-  const ChevronDown = () => (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-    >
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  );
 
   if (generating) {
     return (
@@ -254,31 +281,47 @@ export default function GeneratePage() {
         {/* Step 1: State */}
         <div>
           <SectionLabel step="1" label="Scheme of Work" />
-          <div className="relative">
-            <select
-              value={resolvedState}
-              onChange={(e) => {
-                setState(e.target.value);
-                setSubject("");
-                setSelectedWeek(null);
-              }}
-              className={selectClass}
-              style={selectStyle}
-              onFocus={onFocus}
-              onBlur={onBlur}
-            >
-              <option value="">Select state...</option>
-              {NIGERIAN_STATES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-              <ChevronDown />
+          {showStatePicker ? (
+            <div className="relative">
+              <select
+                value={resolvedState}
+                onChange={(e) => {
+                  setState(e.target.value);
+                  setSubject("");
+                  setSelectedWeek(null);
+                }}
+                className={selectClass}
+                style={selectStyle}
+                onFocus={onFocus}
+                onBlur={onBlur}
+              >
+                <option value="">Select state...</option>
+                {NIGERIAN_STATES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                <ChevronDown />
+              </div>
             </div>
-          </div>
-          {profileState && !state && (
+          ) : (
+            <div
+              className="flex items-center justify-between px-4 py-3 rounded-xl text-sm"
+              style={{ background: "white", border: "1px solid var(--color-border)" }}
+            >
+              <span className="font-medium text-gray-900">{resolvedState}</span>
+              <button
+                onClick={() => setChangingState(true)}
+                className="text-xs font-semibold"
+                style={{ color: "oklch(40% 0.22 290)" }}
+              >
+                Change
+              </button>
+            </div>
+          )}
+          {showStatePicker && profileState && !state && (
             <p
               className="text-xs mt-1.5 font-medium"
               style={{ color: "oklch(40% 0.22 290)" }}
@@ -541,6 +584,50 @@ export default function GeneratePage() {
             ))}
           </div>
         </div>
+
+        {/* Step 6: Reference material (optional) */}
+        <div>
+          <SectionLabel step="6" label="Reference material (optional)" />
+          <div className="relative">
+            <select
+              value={resourceId}
+              onChange={(e) => setResourceId(e.target.value)}
+              className={selectClass}
+              style={selectStyle}
+              onFocus={onFocus}
+              onBlur={onBlur}
+            >
+              <option value="">None</option>
+              {resources.map((r) => (
+                <option key={r.resourceId} value={r.resourceId}>
+                  {r.resourceName}
+                  {r.subject ? ` · ${r.subject}` : ""}
+                </option>
+              ))}
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+              <ChevronDown />
+            </div>
+          </div>
+          <p className="text-xs mt-1.5" style={{ color: "var(--color-text-muted)" }}>
+            {resources.length === 0 ? (
+              <>
+                No resources yet.{" "}
+                <Link href="/resources" className="font-semibold" style={{ color: "oklch(40% 0.22 290)" }}>
+                  Upload one →
+                </Link>
+              </>
+            ) : (
+              "Attach a textbook or material to this lesson."
+            )}
+          </p>
+        </div>
+
+        {error && (
+          <p role="alert" className="text-sm font-medium rounded-xl px-4 py-3" style={{ background: "#FEF2F2", color: "#DC2626" }}>
+            {error}
+          </p>
+        )}
       </div>
 
       {/* ── Sticky CTA — mobile ── */}

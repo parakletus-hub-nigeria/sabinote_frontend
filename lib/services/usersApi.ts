@@ -32,14 +32,16 @@ export const usersApi = baseApi.injectEndpoints({
         defaultSubject?: string | null
         defaultClassLevel?: string | null
         emailNotifications?: boolean
+        notifyGenerationComplete?: boolean
+        notifyWalletTopup?: boolean
       }
     >({
       query: (body) => ({ url: '/users/settings', method: 'PATCH', body }),
       invalidatesTags: ['User'],
     }),
 
-    deleteAccount: build.mutation<{ success: boolean; message: string }, void>({
-      query: () => ({ url: '/users/account', method: 'DELETE' }),
+    deleteAccount: build.mutation<{ success: boolean; message: string }, { password?: string }>({
+      query: (body) => ({ url: '/users/account', method: 'DELETE', body }),
     }),
   }),
   overrideExisting: false,

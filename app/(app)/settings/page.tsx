@@ -6,10 +6,25 @@ import Link from "next/link";
 import { IconEdit, IconLogout, IconUpload, IconShield } from "@/components/icons";
 import { useAppSelector } from "@/lib/hooks";
 import { selectCurrentUser } from "@/lib/slices/authSlice";
-import { useGetMeQuery } from "@/lib/services/authApi";
-import { useUpdateProfileMutation, useUpdateSettingsMutation } from "@/lib/services/usersApi";
-import { useLogoutMutation } from "@/lib/services/authApi";
-import { clearCredentials } from "@/lib/slices/authSlice";
+import {
+  useGetMeQuery,
+  useLogoutMutation,
+  useChangePasswordMutation,
+  useGetSessionsQuery,
+  useRevokeSessionMutation,
+  useLogoutOthersMutation,
+} from "@/lib/services/authApi";
+import {
+  useUpdateProfileMutation,
+  useUpdateSettingsMutation,
+  useDeleteAccountMutation,
+} from "@/lib/services/usersApi";
+import {
+  useGetNotificationsQuery,
+  useMarkAllReadMutation,
+  useMarkReadMutation,
+} from "@/lib/services/notificationsApi";
+import { clearCredentials, setCredentials, selectRefreshToken } from "@/lib/slices/authSlice";
 import { useAppDispatch } from "@/lib/hooks";
 import { NIGERIAN_SUBJECTS, NIGERIAN_STATES, CLASS_LEVELS_UI } from "@/lib/constants";
 
@@ -36,10 +51,46 @@ const onBlur = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
   e.target.style.boxShadow   = "none";
 };
 
-function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+type Notice = { kind: "ok" | "err"; text: string } | null;
+
+function apiError(err: unknown, fallback: string) {
+  const e = err as { status?: number | string; data?: { message?: string | string[] } };
+  const msg = Array.isArray(e?.data?.message) ? e.data?.message[0] : e?.data?.message;
+  if (msg) return msg;
+  if (e?.status === "FETCH_ERROR") return "Network error — check your connection and try again.";
+  return fallback;
+}
+
+function NoticeBar({ notice }: { notice: Notice }) {
+  if (!notice) return null;
+  return (
+    <p
+      role={notice.kind === "err" ? "alert" : "status"}
+      className="text-xs font-medium px-3 py-2 rounded-lg"
+      style={
+        notice.kind === "ok"
+          ? { background: "#ECFDF5", color: "#059669" }
+          : { background: "#FEF2F2", color: "#DC2626" }
+      }
+    >
+      {notice.text}
+    </p>
+  );
+}
+
+function describeDevice(ua?: string | null) {
+  if (!ua) return "Unknown device";
+  const browser = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "Browser";
+  const os = /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : /Windows/.test(ua) ? "Windows" : /Mac OS/.test(ua) ? "macOS" : /Linux/.test(ua) ? "Linux" : "";
+  return os ? `${browser} on ${os}` : browser;
+}
+
+function Toggle({ checked, onChange, label }: { checked: boolean; onChange: () => void; label?: string }) {
   return (
     <button
+      type="button"
       onClick={onChange}
+      aria-label={label}
       role="switch"
       aria-checked={checked}
       className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200"
@@ -96,6 +147,13 @@ export default function SettingsPage() {
   const [updateProfile, { isLoading: savingProfile }] = useUpdateProfileMutation();
   const [updateSettings, { isLoading: savingPrefs }]  = useUpdateSettingsMutation();
   const [logoutMutation] = useLogoutMutation();
+  const [changePassword, { isLoading: changingPw }] = useChangePasswordMutation();
+  const [revokeSession] = useRevokeSessionMutation();
+  const [logoutOthers, { isLoading: loggingOutOthers }] = useLogoutOthersMutation();
+  const [deleteAccount, { isLoading: deleting }] = useDeleteAccountMutation();
+  const [markAllRead] = useMarkAllReadMutation();
+  const [markRead] = useMarkReadMutation();
+  const refreshToken = useAppSelector(selectRefreshToken);
   const currentUser = useAppSelector(selectCurrentUser);
   const isAdmin = currentUser?.role === "admin";
 
@@ -113,6 +171,32 @@ export default function SettingsPage() {
   const [difficulty,         setDifficulty]         = useState<"basic" | "standard" | "advanced">("standard");
   const [alwaysConfirmState, setAlwaysConfirmState] = useState(true);
   const [emailNotifs,        setEmailNotifs]        = useState(true);
+  const [notifyGeneration,   setNotifyGeneration]   = useState(true);
+  const [notifyTopup,        setNotifyTopup]        = useState(true);
+  const [currentPw,          setCurrentPw]          = useState("");
+  const [newPw,              setNewPw]              = useState("");
+  const [confirmPw,          setConfirmPw]          = useState("");
+  const [showDelete,         setShowDelete]         = useState(false);
+  const [deletePw,           setDeletePw]           = useState("");
+  const [notice,             setNotice]             = useState<{ tab: string; value: Notice }>({ tab: "", value: null });
+
+  const tabNotice: Notice = notice.tab === activeTab ? notice.value : null;
+
+  const { data: sessionsData } = useGetSessionsQuery(
+    { refreshToken: refreshToken ?? undefined },
+    { skip: activeTab !== "security" },
+  );
+  const { data: notifData } = useGetNotificationsQuery(
+    { page: 1, limit: 8 },
+    { skip: activeTab !== "notifications" },
+  );
+  const sessions = sessionsData?.data ?? [];
+  const notifications = notifData?.data?.notifications ?? [];
+
+  function flash(tab: string, kind: "ok" | "err", text: string) {
+    setNotice({ tab, value: { kind, text } });
+    if (kind === "ok") setTimeout(() => setNotice((n) => (n.value?.text === text ? { tab: "", value: null } : n)), 4000);
+  }
 
   useEffect(() => {
     if (user) {
@@ -127,25 +211,100 @@ export default function SettingsPage() {
       setDifficulty(settings.noteDifficultyLevel ?? "standard");
       setAlwaysConfirmState(settings.alwaysConfirmState ?? true);
       setEmailNotifs(settings.emailNotifications ?? true);
+      setNotifyGeneration(settings.notifyGenerationComplete ?? true);
+      setNotifyTopup(settings.notifyWalletTopup ?? true);
     }
   }, [user, settings]);
 
   async function handleSaveProfile() {
-    try { await updateProfile({ firstName, lastName, phoneNumber, state }).unwrap(); }
-    catch { /* noop */ }
+    if (!firstName.trim() || !lastName.trim()) {
+      flash("profile", "err", "First and last name are required.");
+      return;
+    }
+    try {
+      await updateProfile({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        phoneNumber: phoneNumber.trim(),
+        state,
+      }).unwrap();
+      setStateChanged(false);
+      flash("profile", "ok", "Profile saved.");
+    } catch (err) {
+      flash("profile", "err", apiError(err, "Couldn't save your profile."));
+    }
   }
 
   async function handleSavePrefs() {
     try {
       await updateSettings({
-        defaultSubject, defaultClassLevel: defaultClass,
-        noteDifficultyLevel: difficulty, alwaysConfirmState, emailNotifications: emailNotifs,
+        defaultSubject: defaultSubject || null,
+        defaultClassLevel: defaultClass || null,
+        noteDifficultyLevel: difficulty,
+        alwaysConfirmState,
       }).unwrap();
-    } catch { /* noop */ }
+      flash("preferences", "ok", "Preferences saved.");
+    } catch (err) {
+      flash("preferences", "err", apiError(err, "Couldn't save your preferences."));
+    }
+  }
+
+  async function handleSaveNotifications() {
+    try {
+      await updateSettings({
+        emailNotifications: emailNotifs,
+        notifyGenerationComplete: notifyGeneration,
+        notifyWalletTopup: notifyTopup,
+      }).unwrap();
+      flash("notifications", "ok", "Notification settings saved.");
+    } catch (err) {
+      flash("notifications", "err", apiError(err, "Couldn't save notification settings."));
+    }
+  }
+
+  async function handleChangePassword() {
+    if (!currentPw) return flash("security", "err", "Enter your current password.");
+    if (newPw.length < 8) return flash("security", "err", "New password must be at least 8 characters.");
+    if (newPw !== confirmPw) return flash("security", "err", "New passwords don't match.");
+    try {
+      const res = await changePassword({ currentPassword: currentPw, newPassword: newPw }).unwrap();
+      // Every other device was signed out; keep this one on the fresh tokens.
+      dispatch(setCredentials(res.data));
+      setCurrentPw(""); setNewPw(""); setConfirmPw("");
+      flash("security", "ok", "Password updated. Other devices have been signed out.");
+    } catch (err) {
+      flash("security", "err", apiError(err, "Couldn't update your password."));
+    }
+  }
+
+  async function handleSignOutOthers() {
+    if (!refreshToken) return;
+    try {
+      await logoutOthers({ refreshToken }).unwrap();
+      flash("security", "ok", "Signed out of all other devices.");
+    } catch (err) {
+      flash("security", "err", apiError(err, "Couldn't sign out other devices."));
+    }
+  }
+
+  async function handleRevoke(sessionId: string) {
+    try { await revokeSession(sessionId).unwrap(); }
+    catch (err) { flash("security", "err", apiError(err, "Couldn't end that session.")); }
+  }
+
+  async function handleDeleteAccount() {
+    try {
+      await deleteAccount({ password: deletePw || undefined }).unwrap();
+      dispatch(clearCredentials());
+      router.replace("/auth/login");
+    } catch (err) {
+      flash("security", "err", apiError(err, "Couldn't delete your account."));
+    }
   }
 
   async function handleLogout() {
-    try { await logoutMutation().unwrap(); }
+    try { await logoutMutation(refreshToken ? { refreshToken } : undefined).unwrap(); }
+    catch { /* sign out locally regardless */ }
     finally { dispatch(clearCredentials()); router.replace("/auth/login"); }
   }
 
@@ -262,6 +421,7 @@ export default function SettingsPage() {
               )}
             </div>
 
+            <NoticeBar notice={tabNotice} />
             <SaveButton onClick={handleSaveProfile} loading={savingProfile} label="Save profile" />
           </div>
         )}
@@ -309,9 +469,10 @@ export default function SettingsPage() {
             </div>
 
             <SettingRow label="Always confirm state" desc="Show state before each generation">
-              <Toggle checked={alwaysConfirmState} onChange={() => setAlwaysConfirmState(v => !v)} />
+              <Toggle label="Always confirm state" checked={alwaysConfirmState} onChange={() => setAlwaysConfirmState(v => !v)} />
             </SettingRow>
 
+            <NoticeBar notice={tabNotice} />
             <SaveButton onClick={handleSavePrefs} loading={savingPrefs} label="Save preferences" />
           </div>
         )}
@@ -319,23 +480,58 @@ export default function SettingsPage() {
         {/* ── Notifications Tab ── */}
         {activeTab === "notifications" && (
           <div className="space-y-3">
-            <SettingRow label="Email notifications" desc="Receive updates via email">
-              <Toggle checked={emailNotifs} onChange={() => setEmailNotifs(v => !v)} />
+            <SettingRow label="Generation complete" desc="In-app alert when your plan or note is ready">
+              <Toggle label="Generation complete" checked={notifyGeneration} onChange={() => setNotifyGeneration(v => !v)} />
+            </SettingRow>
+            <SettingRow label="Wallet top-up confirmed" desc="In-app alert when Parats are added">
+              <Toggle label="Wallet top-up confirmed" checked={notifyTopup} onChange={() => setNotifyTopup(v => !v)} />
+            </SettingRow>
+            <SettingRow label="Email notifications" desc="Also get these updates by email as email delivery rolls out">
+              <Toggle label="Email notifications" checked={emailNotifs} onChange={() => setEmailNotifs(v => !v)} />
             </SettingRow>
 
-            {[
-              { label: "Generation complete", desc: "When your note is ready" },
-              { label: "Wallet top-up confirmed", desc: "Payment confirmation" },
-              { label: "Weekly summary", desc: "Coming soon" },
-            ].map((n, i) => (
-              <div key={i} className="opacity-45 pointer-events-none">
-                <SettingRow label={n.label} desc={n.desc}>
-                  <Toggle checked={false} onChange={() => {}} />
-                </SettingRow>
-              </div>
-            ))}
+            <NoticeBar notice={tabNotice} />
+            <SaveButton onClick={handleSaveNotifications} loading={savingPrefs} label="Save notification settings" />
 
-            <SaveButton onClick={handleSavePrefs} loading={savingPrefs} label="Save notification settings" />
+            <div className="pt-3">
+              <div className="flex items-center justify-between mb-2.5">
+                <h2 className="text-sm font-semibold text-gray-900">Recent notifications</h2>
+                {notifications.some(n => !n.isRead) && (
+                  <button onClick={() => markAllRead()} className="text-xs font-semibold" style={{ color: "oklch(40% 0.22 290)" }}>
+                    Mark all read
+                  </button>
+                )}
+              </div>
+              {notifications.length === 0 ? (
+                <p className="text-xs text-center py-5 bg-white rounded-xl" style={{ border: "1px solid var(--color-border)", color: "var(--color-text-muted)" }}>
+                  You&apos;re all caught up.
+                </p>
+              ) : (
+                <div className="bg-white rounded-xl overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+                  {notifications.map((n, i) => (
+                    <button
+                      key={n.notificationId}
+                      onClick={() => !n.isRead && markRead(n.notificationId)}
+                      className="w-full text-left px-4 py-3 flex gap-3 items-start"
+                      style={{ borderBottom: i < notifications.length - 1 ? "1px solid var(--color-border)" : undefined }}
+                    >
+                      <span
+                        className="mt-1.5 w-2 h-2 rounded-full shrink-0"
+                        style={{ background: n.isRead ? "transparent" : "oklch(40% 0.22 290)" }}
+                        aria-label={n.isRead ? undefined : "Unread"}
+                      />
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-medium text-gray-900">{n.title}</span>
+                        <span className="block text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>{n.body}</span>
+                        <span className="block text-[10px] mt-1" style={{ color: "var(--color-text-muted)" }}>
+                          {new Date(n.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -343,30 +539,89 @@ export default function SettingsPage() {
         {activeTab === "security" && (
           <div className="space-y-4">
             {[
-              { label: "Current password",      placeholder: "••••••••" },
-              { label: "New password",          placeholder: "••••••••" },
-              { label: "Confirm new password",  placeholder: "••••••••" },
+              { label: "Current password",     value: currentPw, set: setCurrentPw, auto: "current-password" },
+              { label: "New password",         value: newPw,     set: setNewPw,     auto: "new-password" },
+              { label: "Confirm new password", value: confirmPw, set: setConfirmPw, auto: "new-password" },
             ].map(f => (
               <div key={f.label}>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">{f.label}</label>
-                <input type="password" placeholder={f.placeholder}
+                <input type="password" value={f.value} onChange={e => f.set(e.target.value)}
+                  autoComplete={f.auto} placeholder="••••••••"
                   className={inputCls} style={baseStyle} onFocus={onFocus} onBlur={onBlur} />
               </div>
             ))}
+            <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>At least 8 characters. Changing your password signs out your other devices.</p>
 
-            <button className="w-full py-3.5 rounded-xl font-semibold text-white text-sm" style={{ background: "oklch(40% 0.22 290)" }}>
-              Update password
-            </button>
+            <NoticeBar notice={tabNotice} />
+            <SaveButton onClick={handleChangePassword} loading={changingPw} label="Update password" />
+
+            <div className="pt-2">
+              <div className="flex items-center justify-between mb-2.5">
+                <h2 className="text-sm font-semibold text-gray-900">Where you&apos;re signed in</h2>
+                {sessions.length > 1 && (
+                  <button onClick={handleSignOutOthers} disabled={loggingOutOthers || !refreshToken}
+                    className="text-xs font-semibold disabled:opacity-50" style={{ color: "oklch(40% 0.22 290)" }}>
+                    Sign out other devices
+                  </button>
+                )}
+              </div>
+              <div className="bg-white rounded-xl overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+                {sessions.length === 0 ? (
+                  <p className="text-xs text-center py-5" style={{ color: "var(--color-text-muted)" }}>No active sessions found.</p>
+                ) : sessions.map((sess, i) => (
+                  <div key={sess.sessionId} className="flex items-center gap-3 px-4 py-3"
+                    style={{ borderBottom: i < sessions.length - 1 ? "1px solid var(--color-border)" : undefined }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900">
+                        {describeDevice(sess.userAgent)}
+                        {sess.isCurrent && (
+                          <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                            style={{ background: "var(--color-primary-dim)", color: "oklch(40% 0.22 290)" }}>This device</span>
+                        )}
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+                        Active {new Date(sess.updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                        {sess.ipAddress ? ` · ${sess.ipAddress}` : ""}
+                      </p>
+                    </div>
+                    {!sess.isCurrent && (
+                      <button onClick={() => handleRevoke(sess.sessionId)} className="text-xs font-semibold text-red-500 shrink-0">
+                        Sign out
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
 
             <div className="mt-4 rounded-2xl p-4" style={{ border: "1px solid #FEE2E2" }}>
               <p className="text-sm font-semibold text-red-600 mb-0.5">Danger zone</p>
-              <p className="text-xs mb-3" style={{ color: "#F87171" }}>This action is permanent and cannot be undone.</p>
-              <button
-                className="w-full py-3 rounded-xl font-semibold text-sm transition-colors"
-                style={{ background: "#FEF2F2", color: "#EF4444", border: "1px solid #FECACA" }}
-              >
-                Delete account
-              </button>
+              <p className="text-xs mb-3" style={{ color: "#F87171" }}>
+                Deletes your account, notes, resources and wallet balance. This is permanent and cannot be undone.
+              </p>
+              {showDelete ? (
+                <div className="space-y-2.5">
+                  <input type="password" value={deletePw} onChange={e => setDeletePw(e.target.value)}
+                    autoComplete="current-password" placeholder="Enter your password to confirm"
+                    className={inputCls} style={baseStyle} onFocus={onFocus} onBlur={onBlur} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={() => { setShowDelete(false); setDeletePw(""); }}
+                      className="py-3 rounded-xl font-semibold text-sm" style={{ background: "white", border: "1px solid var(--color-border)", color: "#374151" }}>
+                      Cancel
+                    </button>
+                    <button onClick={handleDeleteAccount} disabled={deleting || !deletePw}
+                      className="py-3 rounded-xl font-semibold text-sm text-white disabled:opacity-50" style={{ background: "#DC2626" }}>
+                      {deleting ? "Deleting..." : "Delete forever"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setShowDelete(true)}
+                  className="w-full py-3 rounded-xl font-semibold text-sm transition-colors"
+                  style={{ background: "#FEF2F2", color: "#EF4444", border: "1px solid #FECACA" }}>
+                  Delete account
+                </button>
+              )}
             </div>
           </div>
         )}

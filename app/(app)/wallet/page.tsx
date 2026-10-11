@@ -6,10 +6,19 @@ import {
   useGetPackagesQuery,
   useGetWalletQuery,
   useGetTransactionsQuery,
-  useManualTopupMutation,
+  useInitiateTopupMutation,
+  useVerifyTopupMutation,
 } from "@/lib/services/walletApi";
 
-type PayState = "idle" | "submitting" | "success" | "failed";
+type PayState = "idle" | "opening" | "verifying" | "success" | "failed";
+
+function errorMessage(err: unknown, fallback: string) {
+  const data = (err as { data?: { message?: string | string[] } })?.data;
+  const msg = Array.isArray(data?.message) ? data?.message[0] : data?.message;
+  return msg || fallback;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const PACKAGE_META: Record<
   string,
@@ -27,8 +36,14 @@ const PACKAGE_META: Record<
 export default function WalletPage() {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [payState, setPayState] = useState<PayState>("idle");
+  const [payError, setPayError] = useState("");
 
-  const { data: pkgData, isLoading: packagesLoading, isError: packagesError } = useGetPackagesQuery();
+  const {
+    data: pkgData,
+    isLoading: packagesLoading,
+    isError: packagesError,
+    refetch: refetchPackages,
+  } = useGetPackagesQuery();
   const {
     data: walletData,
     isLoading: walletLoading,
@@ -41,7 +56,8 @@ export default function WalletPage() {
     isError: txError,
     refetch: refetchTx,
   } = useGetTransactionsQuery({ limit: 20 });
-  const [manualTopup] = useManualTopupMutation();
+  const [initiateTopup] = useInitiateTopupMutation();
+  const [verifyTopup] = useVerifyTopupMutation();
 
   const packages = pkgData?.data?.packages ?? [];
   const balance = walletData?.data?.balance ?? "0";
@@ -51,24 +67,71 @@ export default function WalletPage() {
   // "success"/"failed" are transient banners — clear back to idle after a beat
   useEffect(() => {
     if (payState !== "success" && payState !== "failed") return;
-    const t = setTimeout(() => setPayState("idle"), 4000);
+    const t = setTimeout(() => setPayState("idle"), 6000);
     return () => clearTimeout(t);
   }, [payState]);
 
-  // TEMPORARY — Paystack is disabled, top-ups credit for free via the
-  // backend's temporary /wallet/topup/manual endpoint. Swap back to the
-  // initiate/Paystack-popup/verify flow once payments are re-enabled.
+  // Paystack's webhook may beat or trail the verify call, so give a just-completed
+  // payment a few chances to be confirmed before telling the user to wait.
+  async function verifyWithRetry(reference: string) {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        await verifyTopup({ reference }).unwrap();
+        return true;
+      } catch {
+        if (attempt < 3) await sleep(1500);
+      }
+    }
+    return false;
+  }
+
   async function handlePurchase() {
     if (selectedIdx === null) return;
     const pkg = packages[selectedIdx];
-    setPayState("submitting");
+    const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
+    if (!publicKey) {
+      setPayError("Payments aren't configured yet. Please contact support.");
+      setPayState("failed");
+      return;
+    }
+
+    setPayError("");
+    setPayState("opening");
     try {
-      await manualTopup({ packageId: pkg.id }).unwrap();
-      setPayState("success");
-      refetchWallet();
-      refetchTx();
-      setSelectedIdx(null);
-    } catch {
+      const res = await initiateTopup({ packageId: pkg.id }).unwrap();
+      const { email, reference } = res.data;
+
+      const PaystackPop = (await import("@paystack/inline-js")).default;
+      const popup = new PaystackPop();
+      popup.newTransaction({
+        key: publicKey,
+        email,
+        amount: pkg.priceNGN * 100, // kobo
+        reference,
+        currency: "NGN",
+        onCancel: () => setPayState("idle"),
+        onError: (err) => {
+          setPayError(err?.message || "Couldn't open the payment window.");
+          setPayState("failed");
+        },
+        onSuccess: async (transaction) => {
+          setPayState("verifying");
+          const ok = await verifyWithRetry(transaction.reference);
+          if (ok) {
+            setPayState("success");
+            setSelectedIdx(null);
+          } else {
+            setPayError(
+              "Payment received, but we couldn't confirm it yet. Your Parats will appear shortly — refresh in a minute.",
+            );
+            setPayState("failed");
+          }
+          refetchWallet();
+          refetchTx();
+        },
+      });
+    } catch (err) {
+      setPayError(errorMessage(err, "Couldn't start the payment. Try again."));
       setPayState("failed");
     }
   }
@@ -336,6 +399,7 @@ export default function WalletPage() {
                 Couldn&apos;t load packages.
               </p>
               <button
+                onClick={() => refetchPackages()}
                 className="text-xs font-semibold"
                 style={{ color: "oklch(40% 0.22 290)" }}
               >
@@ -350,17 +414,20 @@ export default function WalletPage() {
             onClick={handlePurchase}
             disabled={
               selectedIdx === null ||
-              payState === "submitting" ||
+              payState === "opening" ||
+              payState === "verifying" ||
               packages.length === 0
             }
             className="w-full py-4 mt-4 rounded-2xl font-semibold text-sm text-white disabled:opacity-40"
             style={{ background: "oklch(40% 0.22 290)" }}
           >
-            {payState === "submitting"
-              ? "Adding Parats…"
-              : selectedIdx !== null
-                ? `Add ${packages[selectedIdx].parats} Parats — free for now`
-                : "Select a package"}
+            {payState === "opening"
+              ? "Opening payment…"
+              : payState === "verifying"
+                ? "Confirming payment…"
+                : selectedIdx !== null
+                  ? `Pay ₦${packages[selectedIdx].priceNGN.toLocaleString()} for ${packages[selectedIdx].parats} Parats`
+                  : "Select a package"}
           </button>
 
           {payState === "success" && (
@@ -371,12 +438,12 @@ export default function WalletPage() {
               <span aria-hidden="true">
                 <IconCheck className="w-3 h-3" />
               </span>
-              Parats added to your wallet
+              Payment confirmed — Parats added to your wallet
             </p>
           )}
           {payState === "failed" && (
             <p className="text-center text-xs mt-2.5" style={{ color: "#DC2626" }}>
-              Something went wrong. Try again.
+              {payError || "Something went wrong. Try again."}
             </p>
           )}
         </div>
@@ -385,7 +452,7 @@ export default function WalletPage() {
           className="text-center text-xs mt-2"
           style={{ color: "var(--color-text-muted)" }}
         >
-          Free during launch — no payment required.
+          Secure payment by Paystack. New accounts start with free Parats.
         </p>
       </div>
 

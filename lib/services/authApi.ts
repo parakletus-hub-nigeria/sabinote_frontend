@@ -1,6 +1,6 @@
 import { baseApi } from './baseApi'
 import { updateUser } from '../slices/authSlice'
-import type { User, Wallet, UserSettings } from '../types'
+import type { User, Wallet, UserSettings, AuthSession } from '../types'
 
 export interface AuthResponse {
   user: User
@@ -37,8 +37,36 @@ export const authApi = baseApi.injectEndpoints({
       query: (body) => ({ url: '/auth/login', method: 'POST', body }),
     }),
 
-    logout: build.mutation<{ success: boolean; message: string }, void>({
-      query: () => ({ url: '/auth/logout', method: 'POST' }),
+    // Pass the device's refresh token so only THIS session is revoked.
+    // Without it the backend signs the user out of every device.
+    logout: build.mutation<{ success: boolean; message: string }, { refreshToken?: string } | void>({
+      query: (body) => ({ url: '/auth/logout', method: 'POST', body: body ?? {} }),
+    }),
+
+    changePassword: build.mutation<
+      { success: boolean; data: { accessToken: string; refreshToken: string } },
+      { currentPassword?: string; newPassword: string }
+    >({
+      query: (body) => ({ url: '/auth/change-password', method: 'POST', body }),
+      invalidatesTags: ['Sessions'],
+    }),
+
+    getSessions: build.query<
+      { success: boolean; data: AuthSession[] },
+      { refreshToken?: string }
+    >({
+      query: (body) => ({ url: '/auth/sessions', method: 'POST', body }),
+      providesTags: ['Sessions'],
+    }),
+
+    revokeSession: build.mutation<{ success: boolean; message: string }, string>({
+      query: (sessionId) => ({ url: `/auth/sessions/${sessionId}`, method: 'DELETE' }),
+      invalidatesTags: ['Sessions'],
+    }),
+
+    logoutOthers: build.mutation<{ success: boolean; message: string }, { refreshToken: string }>({
+      query: (body) => ({ url: '/auth/logout-others', method: 'POST', body }),
+      invalidatesTags: ['Sessions'],
     }),
 
     getMe: build.query<{ success: boolean; data: MeResponse }, void>({
@@ -55,4 +83,13 @@ export const authApi = baseApi.injectEndpoints({
   overrideExisting: false,
 })
 
-export const { useRegisterMutation, useLoginMutation, useLogoutMutation, useGetMeQuery } = authApi
+export const {
+  useRegisterMutation,
+  useLoginMutation,
+  useLogoutMutation,
+  useGetMeQuery,
+  useChangePasswordMutation,
+  useGetSessionsQuery,
+  useRevokeSessionMutation,
+  useLogoutOthersMutation,
+} = authApi

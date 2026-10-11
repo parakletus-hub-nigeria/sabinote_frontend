@@ -29,6 +29,8 @@ export interface UserSettings {
   defaultSubject: string | null
   defaultClassLevel: string | null
   emailNotifications: boolean
+  notifyGenerationComplete: boolean
+  notifyWalletTopup: boolean
   createdAt?: string
   updatedAt?: string
 }
@@ -191,8 +193,19 @@ export interface Resource {
   classLevel?: string | null
   state?: string | null
   fileUrl: string
+  fileSizeBytes?: number | null
   mimeType?: string
   isPublic: boolean
+  createdAt?: string
+}
+
+export interface AuthSession {
+  sessionId: string
+  userAgent?: string | null
+  ipAddress?: string | null
+  isCurrent: boolean
+  createdAt: string
+  updatedAt: string
 }
 
 // ── Misc ──
