@@ -186,11 +186,11 @@ export default function SettingsPage() {
 
   const { data: sessionsData } = useGetSessionsQuery(
     { refreshToken: refreshToken ?? undefined },
-    { skip: activeTab !== "security" },
+    { skip: activeTab !== "security", refetchOnMountOrArgChange: true },
   );
   const { data: notifData } = useGetNotificationsQuery(
     { page: 1, limit: 8 },
-    { skip: activeTab !== "notifications" },
+    { skip: activeTab !== "notifications", refetchOnMountOrArgChange: true },
   );
   const sessions = sessionsData?.data ?? [];
   const notifications = notifData?.data?.notifications ?? [];
