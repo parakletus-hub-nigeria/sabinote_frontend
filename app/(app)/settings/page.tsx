@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { IconEdit, IconLogout, IconUpload, IconShield } from "@/components/icons";
+import { ReleaseBadge } from "@/components/release";
+import { PLATFORM_RELEASE_MANIFEST } from "@/lib/config/release.manifest";
 import { useAppSelector } from "@/lib/hooks";
 import { selectCurrentUser } from "@/lib/slices/authSlice";
 import {
@@ -651,6 +653,40 @@ export default function SettingsPage() {
           <IconUpload className="w-4 h-4" />
           My resources
         </Link>
+      </div>
+
+      {/* ── System Version & Release Info ── */}
+      <div className="px-5 pb-4">
+        <div
+          className="rounded-2xl p-4 bg-white flex flex-col gap-3 shadow-xs"
+          style={{ border: "1px solid var(--color-border)" }}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold text-[#641BC4] uppercase tracking-wider">
+                System Platform
+              </p>
+              <h4 className="text-sm font-bold text-gray-900 mt-0.5">
+                SabiNote {PLATFORM_RELEASE_MANIFEST.current.versionTag}
+              </h4>
+            </div>
+            <ReleaseBadge variant="light" />
+          </div>
+          <div className="text-xs text-gray-500 space-y-1.5 pt-2 border-t border-gray-100">
+            <div className="flex justify-between items-center">
+              <span>Curriculum Baseline:</span>
+              <span className="font-semibold text-gray-800">
+                {PLATFORM_RELEASE_MANIFEST.current.curriculumBaseline.tag} ({PLATFORM_RELEASE_MANIFEST.current.curriculumBaseline.totalUnits.toLocaleString()} units)
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Codename:</span>
+              <span className="font-medium text-gray-700 truncate max-w-[220px]">
+                {PLATFORM_RELEASE_MANIFEST.current.codename}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── Log out ── */}

@@ -49,6 +49,24 @@ export const notesApi = baseApi.injectEndpoints({
       query: (noteId) => ({ url: `/notes/${noteId}`, method: 'DELETE' }),
       invalidatesTags: [{ type: 'Notes' as const }],
     }),
+
+    submitNoteFeedback: build.mutation<
+      { success: boolean; data: { noteId: string; feedback: any } },
+      {
+        noteId: string
+        rating?: number
+        sentiment?: 'thumbs_up' | 'thumbs_down'
+        tags?: string[]
+        comment?: string
+      }
+    >({
+      query: ({ noteId, ...body }) => ({
+        url: `/notes/${noteId}/feedback`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_result, _err, { noteId }) => [{ type: 'Note' as const, id: noteId }],
+    }),
   }),
   overrideExisting: false,
 })
@@ -59,4 +77,5 @@ export const {
   useGetNoteQuery,
   useUpdateNoteMutation,
   useDeleteNoteMutation,
+  useSubmitNoteFeedbackMutation,
 } = notesApi

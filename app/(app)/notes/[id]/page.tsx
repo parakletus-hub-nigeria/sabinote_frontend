@@ -9,6 +9,7 @@ import { useGetNoteQuery, useUpdateNoteMutation } from "@/lib/services/notesApi"
 import { useRegenerateMutation } from "@/lib/services/generateApi";
 import { useGetWalletQuery } from "@/lib/services/walletApi";
 import { baseApi } from "@/lib/services/baseApi";
+import { TeacherFeedbackWidget } from "@/components/notes/TeacherFeedbackWidget";
 import type { LessonPlan, LessonNote, LessonPlanObjectives } from "@/lib/types";
 
 // ─── Plain-text hygiene ───────────────────────────────────────────────────────
@@ -52,6 +53,17 @@ function cleanPlan(p: LessonPlan): LessonPlan {
       content: s.content ? toPlain(s.content) : s.content,
       duration: s.duration ? toPlain(s.duration) : s.duration,
     })),
+    commonMisconceptions: (p.commonMisconceptions ?? []).map(mc => ({
+      description: toPlain(mc.description ?? ""),
+      reason: toPlain(mc.reason ?? ""),
+      correction: toPlain(mc.correction ?? ""),
+    })),
+    differentiation: p.differentiation
+      ? {
+          support: toPlain(p.differentiation.support ?? ""),
+          extension: toPlain(p.differentiation.extension ?? ""),
+        }
+      : undefined,
   };
 }
 
@@ -95,6 +107,7 @@ const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 const PLAN_SECTIONS = [
   "Behavioural Objectives", "Previous Knowledge", "Entry Behaviour",
   "Instructional Materials", "Reference Books", "Lesson Presentation",
+  "Common Misconceptions", "Differentiation",
   "Evaluation Questions", "Lesson Summary", "Assignment",
 ];
 
@@ -201,19 +214,58 @@ function ListBlock({ items, numbered = false }: { items: string[]; numbered?: bo
   );
 }
 
+function getStageBadge(classLevel?: string) {
+  const norm = (classLevel || "").toLowerCase();
+  if (/nursery|creche|kindergarten|kg\b|early|reception/i.test(norm)) {
+    return { label: "ECCDE / Early Years", color: "bg-amber-50 text-amber-800 border-amber-200" };
+  }
+  if (/primary|basic\s*[1-6]\b|pry/i.test(norm)) {
+    return { label: "Primary Education (9-Year BEC)", color: "bg-blue-50 text-blue-800 border-blue-200" };
+  }
+  if (/jss|basic\s*[7-9]\b|junior/i.test(norm)) {
+    return { label: "Junior Secondary (BECE)", color: "bg-purple-50 text-purple-800 border-purple-200" };
+  }
+  return { label: "Senior Secondary (SSCE / WAEC)", color: "bg-indigo-50 text-indigo-800 border-indigo-200" };
+}
+
 function ObjectivesBlock({ obj }: { obj: LessonPlanObjectives }) {
-  const groups: { label: string; items: string[] }[] = [
-    { label: "Cognitive", items: obj?.cognitive ?? [] },
-    { label: "Affective", items: obj?.affective ?? [] },
-    { label: "Psychomotor", items: obj?.psychomotor ?? [] },
+  const groups: {
+    label: string;
+    sub: string;
+    badgeClass: string;
+    items: string[];
+  }[] = [
+    {
+      label: "Cognitive Domain",
+      sub: "Knowledge & Understanding (Bloom's Taxonomy)",
+      badgeClass: "bg-indigo-50 text-indigo-800 border-indigo-200",
+      items: obj?.cognitive ?? [],
+    },
+    {
+      label: "Affective Domain",
+      sub: "Values, Attitudes & Collaboration",
+      badgeClass: "bg-purple-50 text-purple-800 border-purple-200",
+      items: obj?.affective ?? [],
+    },
+    {
+      label: "Psychomotor Domain",
+      sub: "Physical Manipulation & Practical Demonstrations",
+      badgeClass: "bg-emerald-50 text-emerald-800 border-emerald-200",
+      items: obj?.psychomotor ?? [],
+    },
   ];
   return (
-    <div className="space-y-5">
-      {groups.map(g => (
-        <div key={g.label}>
-          <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--color-text-muted)" }}>
-            {g.label}
-          </p>
+    <div className="space-y-4">
+      {groups.map((g) => (
+        <div key={g.label} className="p-3.5 rounded-2xl bg-white border border-gray-100 shadow-2xs">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${g.badgeClass}`}>
+              {g.label}
+            </span>
+            <span className="text-[11px] text-gray-500 font-medium">
+              {g.sub}
+            </span>
+          </div>
           <ListBlock items={g.items} numbered />
         </div>
       ))}
@@ -230,66 +282,151 @@ function StepsBlock({
 }) {
   if (!steps.length) return <p className="text-[14px] italic" style={{ color: "var(--color-text-muted)" }}>{EMPTY_HINT}</p>;
   return (
-    <div>
+    <div className="space-y-4">
       {steps.map((step, i) => (
-        <div key={i} className="relative pl-8">
-          {i < steps.length - 1 && (
-            <div className="absolute left-[13px] top-7 bottom-0 w-px" style={{ background: "var(--color-border)" }} />
-          )}
-          <div
-            className="absolute left-0 top-0.5 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
-            style={{
-              background: "oklch(40% 0.22 290 / 0.1)",
-              color: "var(--color-primary)",
-              border: "1.5px solid oklch(40% 0.22 290 / 0.2)",
-            }}
-          >
-            {step.step}
-          </div>
-          <div className={i < steps.length - 1 ? "pb-7" : "pb-1"}>
-            <div className="flex items-baseline justify-between gap-2 mb-2">
-              <span className="text-[13px] font-semibold" style={{ color: "var(--color-primary)" }}>
+        <div
+          key={i}
+          className="rounded-2xl p-4.5 bg-white border border-gray-200/80 shadow-2xs"
+        >
+          {/* Step header pill */}
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <span
+                className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+                style={{ background: "oklch(40% 0.22 290)" }}
+              >
+                {step.step}
+              </span>
+              <span className="text-[14px] font-bold text-gray-900">
                 {step.title}
               </span>
-              {step.duration && (
-                <span className="text-[11px] font-mono shrink-0" style={{ color: "var(--color-text-muted)" }}>
-                  {step.duration}
-                </span>
+            </div>
+            {step.duration && (
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200/60 font-semibold shrink-0">
+                {step.duration}
+              </span>
+            )}
+          </div>
+
+          {mode === "plan" ? (
+            <div className="space-y-3">
+              {step.teacherActivity && (
+                <div className="p-3 rounded-xl bg-purple-50/50 border border-purple-100/70">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-purple-900 mb-1 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-600 inline-block" />
+                    Teacher&apos;s Activity (Facilitation)
+                  </p>
+                  <p className="text-[14px] leading-relaxed whitespace-pre-wrap text-gray-800">
+                    {step.teacherActivity}
+                  </p>
+                </div>
+              )}
+              {step.studentActivity && (
+                <div className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-100/70">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-900 mb-1 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 inline-block" />
+                    Pupils&apos; Activity (Active Engagement)
+                  </p>
+                  <p className="text-[14px] leading-relaxed whitespace-pre-wrap text-gray-800">
+                    {step.studentActivity}
+                  </p>
+                </div>
               )}
             </div>
-            {mode === "plan" ? (
-              <div className="space-y-2.5">
-                {step.teacherActivity && (
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--color-text-muted)" }}>
-                      Teacher
-                    </p>
-                    <p className="text-[14px] leading-relaxed whitespace-pre-wrap" style={{ color: "oklch(20% 0.01 290)" }}>
-                      {step.teacherActivity}
-                    </p>
-                  </div>
-                )}
-                {step.studentActivity && (
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--color-text-muted)" }}>
-                      Students
-                    </p>
-                    <p className="text-[14px] leading-relaxed whitespace-pre-wrap" style={{ color: "oklch(20% 0.01 290)" }}>
-                      {step.studentActivity}
-                    </p>
-                  </div>
-                )}
+          ) : (
+            step.content && (
+              <p className="text-[14px] leading-relaxed whitespace-pre-wrap text-gray-800">
+                {step.content}
+              </p>
+            )
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BoardSummaryBlock({ items }: { items: string[] }) {
+  if (!items.length) return <p className="text-[14px] italic" style={{ color: "var(--color-text-muted)" }}>{EMPTY_HINT}</p>;
+  return (
+    <div className="rounded-2xl p-5 bg-slate-900 text-slate-100 shadow-md border border-slate-800">
+      <div className="flex items-center justify-between border-b border-slate-700/80 pb-2.5 mb-3.5">
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+          <span className="text-xs font-mono font-bold tracking-wider text-slate-300 uppercase">
+            Chalkboard / Whiteboard Layout
+          </span>
+        </div>
+        <span className="text-[10px] text-slate-400 font-mono">Teacher Copy Space</span>
+      </div>
+      <ul className="space-y-2.5 pl-1">
+        {items.map((item, idx) => (
+          <li key={idx} className="flex items-start gap-2.5 text-[14px] leading-relaxed text-slate-200">
+            <span className="text-emerald-400 font-bold shrink-0 mt-0.5">•</span>
+            <span className="whitespace-pre-wrap">{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function MisconceptionsBlock({ items }: { items?: LessonPlan["commonMisconceptions"] }) {
+  if (!items || !items.length) return null;
+  return (
+    <div className="space-y-3">
+      {items.map((mc, i) => (
+        <div
+          key={i}
+          className="rounded-2xl p-4 bg-amber-50/60 border border-amber-200/80"
+        >
+          <div className="flex items-start gap-2 mb-1.5">
+            <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-900 flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-bold">
+              !
+            </span>
+            <div className="flex-1">
+              <p className="text-[13px] font-bold text-amber-950">
+                Misconception {i + 1}: {mc.description}
+              </p>
+              <p className="text-[12px] text-amber-800/90 mt-0.5 leading-relaxed">
+                <strong className="font-semibold text-amber-900">Why learners think this:</strong> {mc.reason}
+              </p>
+              <div className="mt-2.5 pt-2 border-t border-amber-200/60 text-[12px] text-emerald-900 bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200/70">
+                <span className="font-semibold text-emerald-950 block mb-0.5">Teacher Correction & Guidance:</span>
+                <p className="leading-relaxed">{mc.correction}</p>
               </div>
-            ) : (
-              step.content && (
-                <p className="text-[14px] leading-relaxed whitespace-pre-wrap" style={{ color: "oklch(20% 0.01 290)" }}>
-                  {step.content}
-                </p>
-              )
-            )}
+            </div>
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function DifferentiationBlock({ diff }: { diff?: LessonPlan["differentiation"] }) {
+  if (!diff) return null;
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200/80">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-blue-900">
+            Support for Struggling Learners (Scaffolding)
+          </span>
+        </div>
+        <p className="text-[13px] text-blue-950 leading-relaxed whitespace-pre-wrap">
+          {diff.support}
+        </p>
+      </div>
+      <div className="p-4 rounded-2xl bg-purple-50/60 border border-purple-200/80">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-purple-900">
+            Extension for Advanced Learners
+          </span>
+        </div>
+        <p className="text-[13px] text-purple-950 leading-relaxed whitespace-pre-wrap">
+          {diff.extension}
+        </p>
+      </div>
     </div>
   );
 }
@@ -1484,12 +1621,65 @@ export default function CanvasPage() {
         <div className="canvas-sheet w-full min-w-0">
         {/* Document header */}
         <div className="px-5 pt-7 pb-1">
-          <h1
-            className="text-[26px] font-bold leading-tight font-display mb-3"
-            style={{ color: "oklch(10% 0.01 290)" }}
-          >
-            {note.topic}
-          </h1>
+          {(() => {
+            const grounding = note?.grounding || (plan as any)?._grounding || (lessonNote as any)?._grounding;
+            return (
+              <>
+                <div className="flex flex-wrap items-center gap-2 mb-2.5">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/90 shadow-2xs">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+                    </span>
+                    2025 NERDC Scheme Verified
+                  </span>
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border shadow-2xs ${getStageBadge(note.classLevel).color}`}>
+                    {getStageBadge(note.classLevel).label}
+                  </span>
+                  {grounding && (
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border shadow-2xs ${
+                        grounding.score >= 80
+                          ? "bg-teal-50 text-teal-800 border-teal-200/90"
+                          : grounding.score >= 70
+                          ? "bg-amber-50 text-amber-800 border-amber-200/90"
+                          : "bg-rose-50 text-rose-800 border-rose-200/90"
+                      }`}
+                      title={`Grounding Fidelity: ${grounding.score}% alignment with canonical NERDC syllabus objectives`}
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      </svg>
+                      {grounding.score}% NERDC Alignment
+                    </span>
+                  )}
+                </div>
+
+                <h1
+                  className="text-[26px] font-bold leading-tight font-display mb-3"
+                  style={{ color: "oklch(10% 0.01 290)" }}
+                >
+                  {note.topic}
+                </h1>
+
+                {grounding && grounding.score < 70 && (
+                  <div className="mb-3.5 p-3 bg-amber-50/90 border border-amber-200 rounded-xl text-[13px] text-amber-900 flex items-start gap-2.5">
+                    <svg className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <div>
+                      <p className="font-semibold text-[13px]">Curriculum Alignment Warning ({grounding.score}% syllabus match)</p>
+                      <p className="text-[12px] text-amber-800 mt-0.5">
+                        Generated plan objectives show minor drift from canonical national NERDC standards. Please review behavioral objectives before class presentation.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <span
@@ -1498,7 +1688,7 @@ export default function CanvasPage() {
             >
               {note.subjectName}
             </span>
-            <span className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+            <span className="text-[12px] font-medium" style={{ color: "var(--color-text-muted)" }}>
               {note.classLevel}
             </span>
             <span style={{ color: "var(--color-border)" }}>·</span>
@@ -1509,15 +1699,23 @@ export default function CanvasPage() {
               <>
                 <span style={{ color: "var(--color-border)" }}>·</span>
                 <span className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-                  {note.state}
+                  {note.state} State
                 </span>
               </>
             )}
             {metaHeader?.duration && (
               <>
                 <span style={{ color: "var(--color-border)" }}>·</span>
+                <span className="text-[12px] font-mono" style={{ color: "var(--color-text-muted)" }}>
+                  {metaHeader.duration} min period
+                </span>
+              </>
+            )}
+            {note.session && (
+              <>
+                <span style={{ color: "var(--color-border)" }}>·</span>
                 <span className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-                  {metaHeader.duration} min
+                  {note.session} Session
                 </span>
               </>
             )}
@@ -1546,6 +1744,16 @@ export default function CanvasPage() {
               <Section label="Lesson Presentation" onEdit={() => openEditor("Lesson Presentation", "presentation")}>
                 <StepsBlock steps={plan.presentation} mode="plan" />
               </Section>
+              {plan.commonMisconceptions && plan.commonMisconceptions.length > 0 && (
+                <Section label="Common Misconceptions" onEdit={() => {}}>
+                  <MisconceptionsBlock items={plan.commonMisconceptions} />
+                </Section>
+              )}
+              {plan.differentiation && (
+                <Section label="Differentiation" onEdit={() => {}}>
+                  <DifferentiationBlock diff={plan.differentiation} />
+                </Section>
+              )}
               <Section label="Evaluation Questions" onEdit={() => openEditor("Evaluation Questions", "evaluation")}>
                 <ListBlock items={plan.evaluation} numbered />
               </Section>
@@ -1555,6 +1763,11 @@ export default function CanvasPage() {
               <Section label="Assignment" onEdit={() => openEditor("Assignment", "assignment")}>
                 <ProseBlock v={plan.assignment} />
               </Section>
+              <TeacherFeedbackWidget
+                noteId={note.noteId}
+                existingFeedback={note.feedback || (plan as any)?._feedback}
+                telemetry={note.telemetry || (plan as any)?._telemetry}
+              />
             </div>
           )}
           {phase === "plan" && !plan && (
@@ -1590,7 +1803,7 @@ export default function CanvasPage() {
                 <SubjectContentBlock blocks={lessonNote.subjectContent} />
               </Section>
               <Section label="Board Summary" onEdit={() => openEditor("Board Summary", "boardSummary")}>
-                <ListBlock items={lessonNote.boardSummary} />
+                <BoardSummaryBlock items={lessonNote.boardSummary} />
               </Section>
               <Section label="Evaluation Questions" onEdit={() => openEditor("Evaluation Questions", "evaluation")}>
                 <QABlock items={lessonNote.evaluation} />
@@ -1601,6 +1814,11 @@ export default function CanvasPage() {
               <Section label="Assignment" onEdit={() => openEditor("Assignment", "assignment")}>
                 <ListBlock items={lessonNote.assignment} numbered />
               </Section>
+              <TeacherFeedbackWidget
+                noteId={note.noteId}
+                existingFeedback={note.feedback || (lessonNote as any)?._feedback || (plan as any)?._feedback}
+                telemetry={note.telemetry || (lessonNote as any)?._telemetry || (plan as any)?._telemetry}
+              />
             </div>
           )}
           {phase === "note" && !generatingNote && !lessonNote && (

@@ -64,6 +64,17 @@ export interface NERDCPresentationStep {
   duration?: string
 }
 
+export interface LessonPlanMisconception {
+  description: string
+  reason: string
+  correction: string
+}
+
+export interface LessonPlanDifferentiation {
+  support: string
+  extension: string
+}
+
 export interface LessonPlan {
   metadata: LessonPlanMetadata
   referenceBooks: string[]
@@ -72,6 +83,8 @@ export interface LessonPlan {
   previousKnowledge: string
   objectives: LessonPlanObjectives
   presentation: NERDCPresentationStep[]
+  commonMisconceptions?: LessonPlanMisconception[]
+  differentiation?: LessonPlanDifferentiation
   evaluation: string[]
   summary: string
   assignment: string
@@ -117,11 +130,36 @@ export interface Note {
   createdAt: string
 }
 
+export interface NoteFeedback {
+  rating?: number
+  sentiment?: 'thumbs_up' | 'thumbs_down'
+  tags?: string[]
+  comment?: string
+  submittedAt?: string
+}
+
+export interface EditTelemetry {
+  editedSections: string[]
+  characterDiffCount: number
+  totalEdits: number
+  lastEditedAt: string
+}
+
+export interface GroundingTelemetry {
+  score: number
+  stage: string
+  curriculumReleaseId?: string
+  curriculumUnitId?: string
+}
+
 export interface NoteDetail extends Note {
   state: string
   session?: string
-  lessonPlanContent: LessonPlan | null
-  lessonNoteContent: LessonNote | null
+  lessonPlanContent: (LessonPlan & { _feedback?: NoteFeedback; _telemetry?: EditTelemetry; _grounding?: GroundingTelemetry }) | null
+  lessonNoteContent: (LessonNote & { _feedback?: NoteFeedback; _telemetry?: EditTelemetry; _grounding?: GroundingTelemetry }) | null
+  feedback?: NoteFeedback | null
+  telemetry?: EditTelemetry | null
+  grounding?: GroundingTelemetry | null
   exportCount: number
   updatedAt: string
 }
@@ -157,18 +195,20 @@ export interface Notification {
   createdAt: string
 }
 
-// ── Curriculum ──
-
 export interface CurriculumWeek {
   id: string
   week: number
   topic: string
-  source: 'state' | 'general'
+  source: 'release' | 'state' | 'general'
+  releaseId?: string
+  unitId?: string
 }
 
 export interface CurriculumWeekDetail {
   id: string
-  source: 'state' | 'general'
+  source: 'release' | 'state' | 'general'
+  releaseId?: string
+  unitId?: string
   state: string
   subject: string
   classLevel: string
@@ -177,10 +217,57 @@ export interface CurriculumWeekDetail {
   topic: string
   subTopics: string[]
   objectives: string[]
+  competencies?: string[]
   teachingActivities?: string
   teachingAids?: string
   evaluation?: string
   referenceText?: string
+}
+
+export interface CurriculumRelease {
+  releaseId: string
+  sourceId: string
+  releaseTag: string
+  title: string
+  stage: 'early_years' | 'primary' | 'junior_secondary' | 'senior_secondary'
+  version: string
+  status: 'draft' | 'published' | 'superseded' | 'archived'
+  checksum?: string | null
+  publishedAt?: string | null
+  metadata?: Record<string, unknown> | null
+  source?: {
+    sourceId: string
+    code: string
+    name: string
+    authority: string
+    jurisdiction: string
+  }
+  _count?: {
+    units: number
+  }
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CurriculumUnit {
+  unitId: string
+  releaseId: string
+  stage: 'early_years' | 'primary' | 'junior_secondary' | 'senior_secondary'
+  classLevel: string
+  subject: string
+  term: number
+  week: number
+  topic: string
+  subTopics: string[]
+  learningObjectives: string[]
+  competencies: string[]
+  teachingActivities?: string | null
+  teachingAids?: string | null
+  evaluationGuide?: string | null
+  referenceMaterials: string[]
+  metadata?: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
 }
 
 // ── Resources ──

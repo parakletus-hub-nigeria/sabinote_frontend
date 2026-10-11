@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useAppSelector } from '@/lib/hooks'
 import { selectIsAuthenticated, selectCurrentUser } from '@/lib/slices/authSlice'
 import TabBar from '@/components/TabBar'
+import { ReleaseBadge } from '@/components/release'
 import { useGetMeQuery } from '@/lib/services/authApi'
 import {
   IconHome,
@@ -34,6 +35,7 @@ function SidebarLink({
   return (
     <Link
       href={href}
+      prefetch={true}
       className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-colors text-sm font-medium"
       style={active
         ? { background: "var(--color-primary-dim)", color: "oklch(40% 0.22 290)" }
@@ -97,37 +99,42 @@ function DesktopSidebar({
         )}
       </nav>
 
-      {/* User footer */}
-      {user && (
-        <div className="px-4 py-4" style={{ borderTop: "1px solid var(--color-border)" }}>
-          <div className="flex items-center gap-3">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 font-bold text-xs font-display"
-              style={{ background: "oklch(40% 0.22 290)", color: "white" }}
-            >
-              {user.firstName[0]}{user.lastName[0]}
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <p className="text-sm font-semibold text-gray-900 truncate">
-                  {user.firstName} {user.lastName}
-                </p>
-                {isAdmin && (
-                  <span
-                    className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide"
-                    style={{ background: "var(--color-primary-dim)", color: "oklch(40% 0.22 290)" }}
-                  >
-                    Admin
-                  </span>
-                )}
+      {/* User footer & release badge */}
+      <div className="border-t shrink-0" style={{ borderColor: "var(--color-border)" }}>
+        {user && (
+          <div className="px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 font-bold text-xs font-display"
+                style={{ background: "oklch(40% 0.22 290)", color: "white" }}
+              >
+                {user.firstName[0]}{user.lastName[0]}
               </div>
-              <p className="text-xs truncate" style={{ color: "var(--color-text-muted)" }}>
-                {user.email}
-              </p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-semibold text-gray-900 truncate">
+                    {user.firstName} {user.lastName}
+                  </p>
+                  {isAdmin && (
+                    <span
+                      className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide"
+                      style={{ background: "var(--color-primary-dim)", color: "oklch(40% 0.22 290)" }}
+                    >
+                      Admin
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs truncate" style={{ color: "var(--color-text-muted)" }}>
+                  {user.email}
+                </p>
+              </div>
             </div>
           </div>
+        )}
+        <div className="px-4 py-2 flex items-center justify-between border-t border-gray-100 bg-gray-50/60">
+          <ReleaseBadge variant="sidebar" className="text-[11px] py-0.5 w-full justify-between" />
         </div>
-      )}
+      </div>
     </aside>
   )
 }
@@ -159,14 +166,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="hidden lg:flex h-screen overflow-hidden">
         <DesktopSidebar user={user} isAdmin={isAdmin} />
         <main className="flex-1 overflow-y-auto" style={{ background: "var(--color-surface)" }}>
-          {isCanvas ? children : <div className="max-w-3xl mx-auto px-8 py-8">{children}</div>}
+          {isCanvas ? (
+            children
+          ) : (
+            <div className="max-w-3xl mx-auto px-8 py-8 flex flex-col min-h-full justify-between">
+              <div>{children}</div>
+              <div className="pt-10 pb-4 flex items-center justify-between border-t border-gray-100 text-xs text-gray-400">
+                <span>© 2026 Parakletus Technologies</span>
+                <ReleaseBadge variant="light" className="text-[11px]" />
+              </div>
+            </div>
+          )}
         </main>
       </div>
 
       {/* Mobile layout */}
       <div className="app-mobile-outer flex items-center justify-center lg:hidden">
         <div className="app-screen">
-          <div className="flex-1 overflow-y-auto scrollbar-hidden">{children}</div>
+          <div className="flex-1 overflow-y-auto scrollbar-hidden">
+            {children}
+            {!isCanvas && (
+              <div className="p-4 flex items-center justify-center border-t border-gray-100">
+                <ReleaseBadge variant="light" className="text-[11px]" />
+              </div>
+            )}
+          </div>
           {!isCanvas && <TabBar />}
         </div>
       </div>

@@ -6,7 +6,8 @@ export interface AdminStats {
   totalNotes: number
   notesThisMonth: number
   totalTopups: number
-  totalRevenueNGN: string
+  totalParatsCredited: number
+  totalRevenueNGN: number | string
 }
 
 export interface AdminUser {
