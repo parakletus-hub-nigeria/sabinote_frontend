@@ -9,9 +9,14 @@ import {
   useGetWalletQuery,
   useGetTransactionsQuery,
   useInitiateTopupMutation,
+  useManualTopupMutation,
   useVerifyTopupMutation,
   type WalletPackage,
 } from "@/lib/services/walletApi";
+
+// TEMPORARY: top-ups go through the backend's /wallet/topup/manual endpoint (no payment).
+// Set to false to switch back to the Paystack popup flow below.
+const USE_MANUAL_TOPUP = true;
 
 type PayState = "idle" | "opening" | "verifying" | "success" | "failed";
 
@@ -69,6 +74,7 @@ export default function WalletPage() {
   } = useGetTransactionsQuery({ limit: 20 });
   const [initiateTopup] = useInitiateTopupMutation();
   const [verifyTopup] = useVerifyTopupMutation();
+  const [manualTopup] = useManualTopupMutation();
 
   const packages =
     pkgData?.data?.packages && pkgData.data.packages.length > 0
@@ -102,6 +108,23 @@ export default function WalletPage() {
   async function handlePurchase() {
     if (selectedIdx === null) return;
     const pkg = packages[selectedIdx];
+
+    if (USE_MANUAL_TOPUP) {
+      setPayError("");
+      setPayState("opening");
+      try {
+        await manualTopup({ packageId: pkg.id }).unwrap();
+        setPayState("success");
+        setSelectedIdx(null);
+        refetchWallet();
+        refetchTx();
+      } catch (err) {
+        setPayError(errorMessage(err, "Couldn't add Parats. Try again."));
+        setPayState("failed");
+      }
+      return;
+    }
+
     const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
     if (!publicKey) {
       setPayError("Payments aren't configured yet. Please contact support.");
@@ -440,7 +463,9 @@ export default function WalletPage() {
               : payState === "verifying"
                 ? "Confirming payment…"
                 : selectedIdx !== null
-                  ? `Pay ₦${packages[selectedIdx].priceNGN.toLocaleString()} for ${packages[selectedIdx].parats} Parats`
+                  ? USE_MANUAL_TOPUP
+                    ? `Add ${packages[selectedIdx].parats} Parats — free for now`
+                    : `Pay ₦${packages[selectedIdx].priceNGN.toLocaleString()} for ${packages[selectedIdx].parats} Parats`
                   : "Select a package"}
           </button>
 
@@ -466,7 +491,9 @@ export default function WalletPage() {
           className="text-center text-xs mt-2"
           style={{ color: "var(--color-text-muted)" }}
         >
-          Secure payment by Paystack. New accounts start with free Parats.
+          {USE_MANUAL_TOPUP
+            ? "Free during launch — no payment required."
+            : "Secure payment by Paystack. New accounts start with free Parats."}
         </p>
       </div>
 
