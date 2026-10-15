@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { IconCheck } from "@/components/icons";
 import { useAppSelector } from "@/lib/hooks";
-import { selectWallet, selectCurrentUser } from "@/lib/slices/authSlice";
+import { selectWallet } from "@/lib/slices/authSlice";
 import {
   useGetPackagesQuery,
   useGetWalletQuery,
@@ -52,7 +52,6 @@ export default function WalletPage() {
   const [payState, setPayState] = useState<PayState>("idle");
   const [payError, setPayError] = useState("");
   const authWallet = useAppSelector(selectWallet);
-  const authUser = useAppSelector(selectCurrentUser);
 
   const {
     data: pkgData,
